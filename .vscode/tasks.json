@@ -1,0 +1,47 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "📁Generate",
+            "type": "shell",
+            "command": "cmake -B build -G Ninja -DCMAKE_C_COMPILER=arm-none-eabi-gcc",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "🔨Build",
+            "type": "shell",
+            "command": "cmake --build build",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "🔄Rebuild",
+            "type": "shell",
+            "command": "cmake --build build --clean-first",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "🧹Clean",
+            "type": "shell",
+            "command": "cmake --build build --target clean",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "🚀Flash",
+            "type": "shell",
+            "command": "cmake --build build --target flash",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "🐞Debug",
+            "type": "shell",
+            "command": "cmake --build build --target debug",
+            "group": "build",
+            "problemMatcher": []
+        }
+    ]
+}

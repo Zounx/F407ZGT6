@@ -8,6 +8,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f4xx_it.h"
+#include "bsp_usart.h"
 
 /******************************************************************************/
 /*           Cortex-M4 Processor Exceptions Handlers                         */
@@ -97,3 +98,40 @@ void SysTick_Handler(void)
 /*                 STM32F4xx Peripherals Interrupt Handlers                   */
 /*  Add here the Interrupt Handler for the used peripheral(s).                */
 /******************************************************************************/
+
+/**
+ * @brief  USART1 中断处理
+ * @note   在 stm32f4xx_it.c 或 main.c 中定义 USART1 对象：
+ *           extern struct bsp_usart  s_usart1;
+ *         然后在 USART1_IRQHandler 中调用：
+ *           bsp_usart_irq_handler(&s_usart1);
+ */
+void USART1_IRQHandler(void)
+{
+    extern struct bsp_usart s_usart1;
+    bsp_usart_irq_handler(&s_usart1);
+}
+
+/**
+ * @brief  USART2 中断处理
+ */
+void USART2_IRQHandler(void)
+{
+    /* TODO: bsp_usart_irq_handler(&s_usart2); */
+}
+
+/**
+ * @brief  USART3 中断处理
+ */
+void USART3_IRQHandler(void)
+{
+    /* TODO: bsp_usart_irq_handler(&s_usart3); */
+}
+
+/**
+ * @brief  UART4 中断处理
+ */
+void UART4_IRQHandler(void)
+{
+    /* TODO: bsp_usart_irq_handler(&s_u4); */
+}

@@ -1,0 +1,5 @@
+C:/Users/ZouJunxiang/Desktop/ZouJunxiang/software/F407ZGT6/build/CMakeFiles/F407_Source.elf.dir
+C:/Users/ZouJunxiang/Desktop/ZouJunxiang/software/F407ZGT6/build/CMakeFiles/flash.dir
+C:/Users/ZouJunxiang/Desktop/ZouJunxiang/software/F407ZGT6/build/CMakeFiles/debug.dir
+C:/Users/ZouJunxiang/Desktop/ZouJunxiang/software/F407ZGT6/build/CMakeFiles/edit_cache.dir
+C:/Users/ZouJunxiang/Desktop/ZouJunxiang/software/F407ZGT6/build/CMakeFiles/rebuild_cache.dir

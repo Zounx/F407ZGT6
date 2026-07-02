@@ -24,6 +24,12 @@ void DebugMon_Handler(void);
 void PendSV_Handler(void);
 void SysTick_Handler(void);
 
+/* 外设中断处理函数 */
+void USART1_IRQHandler(void);
+void USART2_IRQHandler(void);
+void USART3_IRQHandler(void);
+void UART4_IRQHandler(void);
+
 #ifdef __cplusplus
 }
 #endif
