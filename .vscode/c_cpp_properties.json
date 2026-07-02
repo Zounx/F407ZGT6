@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "STM32F407ZG",
+            "includePath": [
+                "${workspaceFolder}/User/Include",
+                "${workspaceFolder}/Platform/STM32F4xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Platform/STM32F4xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/Platform/CMSIS/Device/ST/STM32F4xx/Include",
+                "${workspaceFolder}/Platform/CMSIS/Core/Include"
+            ],
+            "defines": [
+                "STM32F407xx",
+                "USE_HAL_DRIVER",
+                "STM32F407ZG"
+            ],
+            "cStandard": "c99",
+            "intelliSenseMode": "gcc-arm"
+        }
+    ],
+    "version": 4
+}

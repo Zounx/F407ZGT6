@@ -1,0 +1,45 @@
+# ============================================
+# STM32 Keil MDK 项目 .gitignore
+# ============================================
+
+# --- Keil MDK 编译输出目录 ---
+Debug/
+DebugConfig/
+
+# --- Keil MDK 生成文件 ---
+*.uvguix.*
+*.uvoptx
+# *.uvprojx   # 保留项目文件，不忽略
+
+# --- 编译中间文件 ---
+*.o
+*.d
+*.crf
+*.dep
+*.elf
+*.axf
+*.hex
+*.bin
+*.map
+*.lst
+*.lnp
+*.sct
+*.htm
+*.build_log.htm
+
+# --- IDE 临时文件 ---
+*.scvd
+*.uvprojx.bak
+*.uvoptx.bak
+
+# --- JLink / 调试器文件 ---
+JLinkLog.txt
+JLinkSettings.ini
+
+# --- 通用忽略 ---
+*.tmp
+*.bak
+*.swp
+*~
+Thumbs.db
+Desktop.ini
