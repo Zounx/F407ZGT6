@@ -6,6 +6,8 @@
   */
 
 #include "main.h"
+#include "bsp_usart.h"
+#include "ExtHardwareTest.h"
 
 /** USART1 对象定义（非 static，供 stm32f4xx_it.c 使用） */
 struct bsp_usart s_usart1;
@@ -28,12 +30,15 @@ int main(void)
 
   bsp_usart_send_str(&s_usart1, "USART1 初始化完成\r\n");
 
-  /* 初始化系统定时器 */
+  /* 初始化外部 SRAM（FSMC Bank3，0x68000000） */
+  bsp_sram_init();
+
+  /* 初始化全部硬件定时器（TIM1~14），TIM6 为 1ms 心跳 */
   scheduler_tim_init();
 
-  /* 主循环 */
+  /* 主循环：调度器运行（TIM6 中断内轮询 USART + 测试命令） */
   while (1)
   {
-		scheduler_run();
+    scheduler_run();
   }
 }

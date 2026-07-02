@@ -26,6 +26,11 @@ DebugConfig/
 *.sct
 *.htm
 *.build_log.htm
+*.obj
+
+# --- CMake 构建目录 ---
+build/
+cmake-build-*/
 
 # --- IDE 临时文件 ---
 *.scvd

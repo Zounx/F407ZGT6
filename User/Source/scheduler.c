@@ -1,6 +1,7 @@
 #include "scheduler.h"
 #include "bsp_tim.h"
 #include "bsp_usart.h"
+#include "ExtHardwareTest.h"
 
 /* 压制 GCC 10 对空数组初始化的 -Warray-bounds 假阳性警告 */
 #if defined(__GNUC__) && !defined(__ARMCC_VERSION)
@@ -73,6 +74,7 @@ static uint8_t task_num;      /**< 任务总数 */
  * @note   在此添加需要周期性执行的任务
  */
 static task_t scheduler_task[] = {
+	{ext_hw_test_proc,10,0},
 
 };
 
@@ -150,7 +152,7 @@ extern struct bsp_usart s_usart1;
 
 /* ---- 回调函数 ---- */
 
-/** @brief TIM6 回调：1ms 心跳，轮询 USART DMA */
+/** @brief TIM6 回调：1ms 心跳，轮询 USART DMA 和测试命令 */
 static void tim6_cb(void)
 {
     bsp_usart_proc(&s_usart1);
@@ -269,101 +271,79 @@ int scheduler_tim_init(void)
 {
     int ret;
 
-    /*
-     * ┌──────────────┬────────┬───────┬──────┬─────────────────────────┐
-     * │ 定时器       │ 总线   │ 位数  │ 优先级 │ 用途                    │
-     * ├──────────────┼────────┼───────┼──────┼─────────────────────────┤
-     * │ TIM2         │ APB1   │ 32    │ 0    │ 250us 子周期            │
-     * │ TIM6         │ APB1   │ 16    │ 1    │ 1ms 系统心跳            │
-     * │ TIM3         │ APB1   │ 16    │ 2    │ 50ms 备用               │
-     * │ TIM4         │ APB1   │ 16    │ 2    │ 50ms 备用               │
-     * │ TIM7         │ APB1   │ 16    │ 2    │ 50ms 备用               │
-     * │ TIM1         │ APB2   │ 16    │ 3    │ 预留（高级定时器）      │
-     * │ TIM8         │ APB2   │ 16    │ 3    │ 预留（高级定时器）      │
-     * │ TIM9         │ APB2   │ 16    │ 3    │ 预留                    │
-     * │ TIM10        │ APB2   │ 16    │ 3    │ 预留                    │
-     * │ TIM11        │ APB2   │ 16    │ 3    │ 预留                    │
-     * │ TIM12        │ APB1   │ 16    │ 3    │ 预留                    │
-     * │ TIM13        │ APB1   │ 16    │ 3    │ 预留                    │
-     * │ TIM14        │ APB1   │ 16    │ 3    │ 预留                    │
-     * │ TIM5         │ APB1   │ 32    │ 4    │ 1000ms 备用             │
-     * └──────────────┴────────┴───────┴──────┴─────────────────────────┘
-     */
-
-    /* TIM6 1ms 系统心跳 */
+    /* ----------------------------------------
+     *  TIM6 基本定时器 - 1ms 系统心跳
+     *  bsp_usart_proc + ext_hw_test_proc
+     * ---------------------------------------- */
     ret = bsp_tim_init(&s_tim6, TIM6, 1, tim6_cb, 1);
-    if (ret) return ret;
+    if (ret) return -6;
 
-    /* TIM2 250us 子周期 */
+    /* ----------------------------------------
+     *  TIM2 32位通用 - 250us 子周期
+     * ---------------------------------------- */
     ret = bsp_tim_init_us(&s_tim2, TIM2, 250, tim2_sub_cb, 0);
-    if (ret) return ret;
+    if (ret) return -2;
 
-    /* TIM7 50ms 备用 */
+    /* ----------------------------------------
+     *  TIM7 / TIM3 / TIM4 - 50ms
+     * ---------------------------------------- */
     ret = bsp_tim_init(&s_tim7, TIM7, 50, tim7_cb, 2);
-    if (ret) return ret;
+    if (ret) return -7;
 
-    /* TIM3 50ms 备用 */
     ret = bsp_tim_init(&s_tim3, TIM3, 50, tim3_cb, 2);
-    if (ret) return ret;
+    if (ret) return -3;
 
-    /* TIM4 50ms 备用 */
     ret = bsp_tim_init(&s_tim4, TIM4, 50, tim4_cb, 2);
-    if (ret) return ret;
+    if (ret) return -4;
 
-    /* TIM5 1000ms 备用 */
+    /* ----------------------------------------
+     *  TIM5 32位通用 - 1000ms
+     * ---------------------------------------- */
     ret = bsp_tim_init(&s_tim5, TIM5, 1000, tim5_cb, 4);
-    if (ret) return ret;
+    if (ret) return -5;
 
-    /* TIM1 (APB2) 100ms 预留 */
+    /* ----------------------------------------
+     *  TIM1 / TIM8 高级定时器 - 100ms
+     * ---------------------------------------- */
     ret = bsp_tim_init(&s_tim1, TIM1, 100, tim1_cb, 3);
-    if (ret) return ret;
+    if (ret) return -1;
 
-    /* TIM8 (APB2) 100ms 预留 */
     ret = bsp_tim_init(&s_tim8, TIM8, 100, tim8_cb, 3);
-    if (ret) return ret;
+    if (ret) return -8;
 
-    /* TIM9~14 100ms 预留 */
-    ret = bsp_tim_init(&s_tim9,  TIM9,  100, tim9_cb,  3); if (ret) return ret;
-    ret = bsp_tim_init(&s_tim10, TIM10, 100, tim10_cb, 3); if (ret) return ret;
-    ret = bsp_tim_init(&s_tim11, TIM11, 100, tim11_cb, 3); if (ret) return ret;
-    ret = bsp_tim_init(&s_tim12, TIM12, 100, tim12_cb, 3); if (ret) return ret;
-    ret = bsp_tim_init(&s_tim13, TIM13, 100, tim13_cb, 3); if (ret) return ret;
-    ret = bsp_tim_init(&s_tim14, TIM14, 100, tim14_cb, 3); if (ret) return ret;
+    /* ----------------------------------------
+     *  TIM9~14 通用定时器 - 100ms
+     * ---------------------------------------- */
+    ret = bsp_tim_init(&s_tim9, TIM9, 100, tim9_cb, 3);
+    if (ret) return -9;
 
-    /*
-     * ==== 清除定时器遗留标志 + NVIC 挂起 ====
-     * 初始化阶段全局 IRQ 关闭，定时器可能已溢出多次，
-     * 导致 IRQ 使能时遗留挂起中断。此处全部清掉。
-     */
-    TIM1->SR  = ~TIM_SR_UIF;
-    TIM2->SR  = ~TIM_SR_UIF;
-    TIM3->SR  = ~TIM_SR_UIF;
-    TIM4->SR  = ~TIM_SR_UIF;
-    TIM5->SR  = ~TIM_SR_UIF;
-    TIM6->SR  = ~TIM_SR_UIF;
-    TIM7->SR  = ~TIM_SR_UIF;
-    TIM8->SR  = ~TIM_SR_UIF;
-    TIM9->SR  = ~TIM_SR_UIF;
-    TIM10->SR = ~TIM_SR_UIF;
-    TIM11->SR = ~TIM_SR_UIF;
-    TIM12->SR = ~TIM_SR_UIF;
-    TIM13->SR = ~TIM_SR_UIF;
-    TIM14->SR = ~TIM_SR_UIF;
+    ret = bsp_tim_init(&s_tim10, TIM10, 100, tim10_cb, 3);
+    if (ret) return -10;
 
-    NVIC_ClearPendingIRQ(TIM1_BRK_TIM9_IRQn);
+    ret = bsp_tim_init(&s_tim11, TIM11, 100, tim11_cb, 3);
+    if (ret) return -11;
+
+    ret = bsp_tim_init(&s_tim12, TIM12, 100, tim12_cb, 3);
+    if (ret) return -12;
+
+    ret = bsp_tim_init(&s_tim13, TIM13, 100, tim13_cb, 3);
+    if (ret) return -13;
+
+    ret = bsp_tim_init(&s_tim14, TIM14, 100, tim14_cb, 3);
+    if (ret) return -14;
+
+    /* 总清所有定时器 NVIC 挂起（安全冗余） */
     NVIC_ClearPendingIRQ(TIM1_UP_TIM10_IRQn);
-    NVIC_ClearPendingIRQ(TIM1_TRG_COM_TIM11_IRQn);
-    NVIC_ClearPendingIRQ(TIM1_CC_IRQn);
     NVIC_ClearPendingIRQ(TIM2_IRQn);
     NVIC_ClearPendingIRQ(TIM3_IRQn);
     NVIC_ClearPendingIRQ(TIM4_IRQn);
     NVIC_ClearPendingIRQ(TIM5_IRQn);
     NVIC_ClearPendingIRQ(TIM6_DAC_IRQn);
     NVIC_ClearPendingIRQ(TIM7_IRQn);
-    NVIC_ClearPendingIRQ(TIM8_BRK_TIM12_IRQn);
     NVIC_ClearPendingIRQ(TIM8_UP_TIM13_IRQn);
+    NVIC_ClearPendingIRQ(TIM1_BRK_TIM9_IRQn);
+    NVIC_ClearPendingIRQ(TIM8_BRK_TIM12_IRQn);
     NVIC_ClearPendingIRQ(TIM8_TRG_COM_TIM14_IRQn);
-    NVIC_ClearPendingIRQ(TIM8_CC_IRQn);
 
     return 0;
 }

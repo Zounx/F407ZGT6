@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F407xx, USE_HAL_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>User\Include;Platform\STM32F4xx_HAL_Driver\Inc;Platform\STM32F4xx_HAL_Driver\Inc\Legacy;Platform\CMSIS\Device\ST\STM32F4xx\Include;Platform\CMSIS\Core\Include;.\BSP\Include</IncludePath>
+              <IncludePath>User\Include;Platform\STM32F4xx_HAL_Driver\Inc;Platform\STM32F4xx_HAL_Driver\Inc\Legacy;Platform\CMSIS\Device\ST\STM32F4xx\Include;Platform\CMSIS\Core\Include;.\BSP\Include;.\Middlewares\FATFS\Include;.\Middlewares\FATFS\FATFS_app</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -451,6 +451,11 @@
               <FileName>scheduler.c</FileName>
               <FileType>1</FileType>
               <FilePath>.\User\Source\scheduler.c</FilePath>
+            </File>
+            <File>
+              <FileName>ExtHardwareTest.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\User\Source\ExtHardwareTest.c</FilePath>
             </File>
           </Files>
         </Group>

@@ -74,6 +74,7 @@ set(USER_SOURCES
     User/Source/Main.c
     User/Source/stm32f4xx_it.c
     User/Source/scheduler.c
+    User/Source/ExtHardwareTest.c
     Platform/CMSIS/Device/ST/STM32F4xx/Source/Templates/system_stm32f4xx.c
 )
 

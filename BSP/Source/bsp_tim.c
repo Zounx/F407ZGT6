@@ -106,14 +106,9 @@ int bsp_tim_init(struct bsp_tim *me, TIM_TypeDef *instance,
     uint32_t timer_clk, psc, arr;
 
     /* ---------- 参数校验 ---------- */
-    if (!me || !instance)
-        return -1;
-
-    if (!_is_valid_timer(instance))
-        return -1;
-
-    if (period_ms == 0)
-        return -2;
+    if (!me || !instance)     return -1;
+    if (!_is_valid_timer(instance)) return -1;
+    if (period_ms == 0)       return -2;
 
     /* ---------- 保存配置 ---------- */
     me->instance  = instance;
@@ -138,9 +133,9 @@ int bsp_tim_init(struct bsp_tim *me, TIM_TypeDef *instance,
 
     /* ---------- 2. 计算 PSC/ARR ---------- */
     if (_is_apb2_timer(instance))
-        timer_clk = HAL_RCC_GetPCLK2Freq() * 2;   /* 168MHz */
+        timer_clk = HAL_RCC_GetPCLK2Freq() * 2;
     else
-        timer_clk = HAL_RCC_GetPCLK1Freq() * 2;   /* 84MHz  */
+        timer_clk = HAL_RCC_GetPCLK1Freq() * 2;
 
     psc = timer_clk / 1000000 - 1;
     arr = period_ms * 1000 - 1;
@@ -156,17 +151,21 @@ int bsp_tim_init(struct bsp_tim *me, TIM_TypeDef *instance,
     if (HAL_TIM_Base_Init(&htim) != HAL_OK)
         return -3;
 
-    /* ---------- 4. 设置 NVIC 优先级 ---------- */
+    /* 清除 HAL 可能遗留的 UIF 标志和 NVIC 挂起 */
+    instance->SR = ~TIM_SR_UIF;
+    NVIC_ClearPendingIRQ(_get_tim_irqn(instance));
+
+    /* ---------- 4. 设置 NVIC 优先级和使能中断 ---------- */
     HAL_NVIC_SetPriority(_get_tim_irqn(instance), priority, 0);
+    HAL_NVIC_EnableIRQ(_get_tim_irqn(instance));
 
-    /* ---------- 5. 使能更新中断 ---------- */
-    __HAL_TIM_ENABLE_IT(&htim, TIM_IT_UPDATE);
+    /* 先置标志，确保 ISR 可正确处理第一个中断 */
+    me->initialized = true;
 
-    /* ---------- 6. 启动定时器（中断模式） ---------- */
+    /* ---------- 5. 启动定时器（HAL_TIM_Base_Start_IT 内含使能 UIE + CEN） ---------- */
     if (HAL_TIM_Base_Start_IT(&htim) != HAL_OK)
         return -4;
 
-    me->initialized = true;
     return 0;
 }
 
@@ -237,17 +236,21 @@ int bsp_tim_init_us(struct bsp_tim *me, TIM_TypeDef *instance,
     if (HAL_TIM_Base_Init(&htim) != HAL_OK)
         return -3;
 
-    /* ---------- 4. 设置 NVIC 优先级 ---------- */
+    /* 清除 HAL 可能遗留的 UIF 标志和 NVIC 挂起 */
+    instance->SR = ~TIM_SR_UIF;
+    NVIC_ClearPendingIRQ(_get_tim_irqn(instance));
+
+    /* ---------- 4. 设置 NVIC 优先级和使能中断 ---------- */
     HAL_NVIC_SetPriority(_get_tim_irqn(instance), priority, 0);
+    HAL_NVIC_EnableIRQ(_get_tim_irqn(instance));
 
-    /* ---------- 5. 使能更新中断 ---------- */
-    __HAL_TIM_ENABLE_IT(&htim, TIM_IT_UPDATE);
+    /* 先置标志，确保 ISR 可正确处理第一个中断 */
+    me->initialized = true;
 
-    /* ---------- 6. 启动定时器 ---------- */
+    /* ---------- 5. 启动定时器（HAL_TIM_Base_Start_IT 内含使能 UIE + CEN） ---------- */
     if (HAL_TIM_Base_Start_IT(&htim) != HAL_OK)
         return -4;
 
-    me->initialized = true;
     return 0;
 }
 
