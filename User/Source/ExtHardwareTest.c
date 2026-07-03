@@ -5,8 +5,26 @@
  * @note        协议格式：$Test,CMD,SUB[,参数]#，大小写不敏感
  *
  *   已支持命令：
- *     $Test,GPIO,<引脚>,<值>#   — GPIO 输出控制（如 A1,1  PA1 高电平）
- *     $Test,SRAM,MarchC#        — 外部 SRAM March C- 全扫描
+ *     $Test,GPIO,<引脚>,<值>#      — GPIO 输出控制（如 A1,1  PA1 高电平）
+ *     $Test,SRAM,MarchC#           — 外部 SRAM March C- 全扫描
+ *     $Test,SD,MOUNT#              — 初始化 SD + 挂载 FATFS + 打印卡信息
+ *     $Test,SD,WRITE,路径,内容#     — 写入内容到指定文件
+ *     $Test,SD,READ,路径#           — 读取指定文件并串口输出
+ *     $Test,SD,MKDIR,目录名#        — 创建目录
+ *     $Test,SD,MKFILE,文件名#       — 创建空文件
+ *     $Test,SD,LIST#               — 列出根目录
+ *     $Test,SD,DELETE,文件名#       — 删除文件/空目录
+ * 
+ *   SD 指令使用示例（按顺序操作）：
+ *     $Test,SD,MOUNT#                      —① 挂载
+ *     $Test,SD,MKDIR,myfolder#             —② 创建子目录
+ *     $Test,SD,WRITE,test.txt,Hello#       —③ 写根目录文件
+ *     $Test,SD,WRITE,myfolder/data.txt,OK# —④ 写子目录文件
+ *     $Test,SD,READ,test.txt#              —⑤ 读取
+ *     $Test,SD,READ,myfolder/data.txt#     —⑥ 读取子目录文件
+ *     $Test,SD,LIST#                       —⑦ 列出所有文件
+ *     $Test,SD,DELETE,myfolder/data.txt#   —⑧ 删子目录内文件
+ *     $Test,SD,DELETE,myfolder#            —⑨ 删空目录
  ****************************************************************************************************
  */
 
@@ -14,6 +32,7 @@
 #include "bsp_usart.h"
 #include "bsp_gpio.h"
 #include "bsp_sram.h"
+#include "SD.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -141,6 +160,14 @@ static void gpio_test_set(void)
 static const struct test_cmd_entry s_cmd_table[] = {
     {"GPIO",  "",       gpio_test_set},    /* 空 sub = 通配，由 handler 自行解析引脚名和值 */
     {"SRAM",  "MarchC", bsp_sram_scan},
+    /* SD 卡 FATFS 测试 */
+    {"SD",    "MOUNT",  sd_test_mount},
+    {"SD",    "WRITE",  sd_test_write},
+    {"SD",    "READ",   sd_test_read},
+    {"SD",    "MKDIR",  sd_test_mkdir},
+    {"SD",    "MKFILE", sd_test_mkfile},
+    {"SD",    "LIST",   sd_test_list},
+    {"SD",    "DELETE", sd_test_delete},
 };
 
 static const uint8_t s_cmd_count =

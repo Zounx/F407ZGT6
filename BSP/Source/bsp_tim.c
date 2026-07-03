@@ -106,9 +106,14 @@ int bsp_tim_init(struct bsp_tim *me, TIM_TypeDef *instance,
     uint32_t timer_clk, psc, arr;
 
     /* ---------- 参数校验 ---------- */
-    if (!me || !instance)     return -1;
-    if (!_is_valid_timer(instance)) return -1;
-    if (period_ms == 0)       return -2;
+    if (!me || !instance)     
+			return -1;
+		
+    if (!_is_valid_timer(instance)) 
+			return -1;
+		
+    if (period_ms == 0)       
+			return -2;
 
     /* ---------- 保存配置 ---------- */
     me->instance  = instance;

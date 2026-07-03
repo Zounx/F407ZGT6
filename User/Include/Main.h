@@ -12,5 +12,6 @@
 #include "bsp_usart.h"
 #include "bsp_sram.h"
 #include "scheduler.h"
-
+#include "ExtHardwareTest.h"
+#include "SD.h"
 #endif /* __MAIN_H */

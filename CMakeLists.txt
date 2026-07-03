@@ -43,6 +43,8 @@ add_definitions(-DSTM32F407xx -DUSE_HAL_DRIVER)
 include_directories(
     ${PROJECT_SOURCE_DIR}/User/Include
     ${PROJECT_SOURCE_DIR}/BSP/Include
+    ${PROJECT_SOURCE_DIR}/Middlewares/FATFS/Include
+    ${PROJECT_SOURCE_DIR}/Middlewares/FATFS/FATFS_app
     ${PROJECT_SOURCE_DIR}/Platform/STM32F4xx_HAL_Driver/Inc
     ${PROJECT_SOURCE_DIR}/Platform/STM32F4xx_HAL_Driver/Inc/Legacy
     ${PROJECT_SOURCE_DIR}/Platform/CMSIS/Device/ST/STM32F4xx/Include
@@ -63,6 +65,7 @@ set(BSP_SOURCES
     BSP/Source/bsp_adc.c
     BSP/Source/bsp_gpio.c
     BSP/Source/bsp_iic.c
+    BSP/Source/bsp_sdio_sd.c
     BSP/Source/bsp_spi.c
     BSP/Source/bsp_sram.c
     BSP/Source/bsp_tim.c
@@ -113,6 +116,16 @@ set(HAL_SOURCES
     Platform/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_sdmmc.c
 )
 
+# --- FATFS 中间件层 ---
+set(FATFS_SOURCES
+    Middlewares/FATFS/Source/ff.c
+    Middlewares/FATFS/Source/ffunicode.c
+    Middlewares/FATFS/Source/ffsystem.c
+    Middlewares/FATFS/Source/diskio.c
+    Middlewares/FATFS/Source/exfuns.c
+    Middlewares/FATFS/FATFS_app/SD.c
+)
+
 # ============================================================================
 #  目标
 # ============================================================================
@@ -121,6 +134,7 @@ add_executable(${PROJECT_NAME}.elf
     ${STARTUP_SOURCES}
     ${BSP_SOURCES}
     ${USER_SOURCES}
+    ${FATFS_SOURCES}
     ${HAL_SOURCES}
 )
 

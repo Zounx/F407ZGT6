@@ -422,6 +422,11 @@
               <FileType>1</FileType>
               <FilePath>.\BSP\Source\bsp_usart.c</FilePath>
             </File>
+            <File>
+              <FileName>bsp_sdio_sd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\BSP\Source\bsp_sdio_sd.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -621,9 +626,48 @@
         </Group>
         <Group>
           <GroupName>Middlewares/FATFS</GroupName>
+          <Files>
+            <File>
+              <FileName>diskio.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\FATFS\Source\diskio.c</FilePath>
+            </File>
+            <File>
+              <FileName>exfuns.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\FATFS\Source\exfuns.c</FilePath>
+            </File>
+            <File>
+              <FileName>fattester.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\FATFS\Source\fattester.c</FilePath>
+            </File>
+            <File>
+              <FileName>ff.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\FATFS\Source\ff.c</FilePath>
+            </File>
+            <File>
+              <FileName>ffsystem.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\FATFS\Source\ffsystem.c</FilePath>
+            </File>
+            <File>
+              <FileName>ffunicode.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\FATFS\Source\ffunicode.c</FilePath>
+            </File>
+          </Files>
         </Group>
         <Group>
           <GroupName>Middlewares/FATFS/FATFS_app</GroupName>
+          <Files>
+            <File>
+              <FileName>SD.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\FATFS\FATFS_app\SD.c</FilePath>
+            </File>
+          </Files>
         </Group>
         <Group>
           <GroupName>Middlewares/WIZnet</GroupName>
