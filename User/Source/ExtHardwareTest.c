@@ -14,6 +14,11 @@
  *     $Test,SD,MKFILE,文件名#       — 创建空文件
  *     $Test,SD,LIST#               — 列出根目录
  *     $Test,SD,DELETE,文件名#       — 删除文件/空目录
+ *     $Test,SD,PURE#                 — 纯函数功能全面测试（写→读→子目录→删除）
+ *     $Test,SD,STRESS#               — DMA 写读压力测试（默认 10000 轮）
+ *     $Test,SD,STRESS,5000#           — 指定 5000 轮
+ *     $Test,NET,WIZnet,192.168.0.23#  — 设置 WIZnet 本机 IP
+ *     $Test,NET,WIZ_REMOTE,192.168.1.200#  — 设置 WIZnet 远端目标 IP
  * 
  *   SD 指令使用示例（按顺序操作）：
  *     $Test,SD,MOUNT#                      —① 挂载
@@ -33,6 +38,7 @@
 #include "bsp_gpio.h"
 #include "bsp_sram.h"
 #include "SD.h"
+#include "ETH_WIZdemo.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -155,6 +161,90 @@ static void gpio_test_set(void)
 
 
 /* ============================================================================
+ * NET 测试 — 在线更改 WIZnet IP 地址（不持久化，掉电恢复默认值）
+ *   $Test,NET,WIZnet,192.168.0.23#  -> 设置 WIZnet IP = 192.168.0.23
+ *   说明：g_test_param 存放点分十进制字符串，如 "192.168.0.23"
+ * ============================================================================ */
+
+/**
+ * @brief  解析点分十进制 IP 字符串 "192.168.0.23" → {192,168,0,23}
+ * @return 0 成功，-1 格式错误
+ */
+static int parse_ip_dot(const char *str, uint8_t ip[4])
+{
+    uint8_t n = 0;
+    uint32_t val = 0;
+
+    while (*str && n < 4) {
+        if (*str >= '0' && *str <= '9') {
+            val = val * 10 + (uint32_t)(*str - '0');
+        } else if (*str == '.') {
+            if (val > 255) return -1;
+            ip[n++] = (uint8_t)val;
+            val = 0;
+        } else {
+            return -1;
+        }
+        str++;
+    }
+    if (val > 255) return -1;
+    ip[n++] = (uint8_t)val;
+
+    return (n == 4) ? 0 : -1;
+}
+
+static void net_set_ip_handler(void)
+{
+    uint8_t ip[4];
+
+    if (g_test_sub[0] == '\0' ||
+        (str_icmp(g_test_sub, "WIZnet") != 0)) {
+        bsp_usart_printf(&s_usart1, "[NET] ERR: need WIZnet\r\n");
+        return;
+    }
+
+    if (g_test_param[0] == '\0' || parse_ip_dot(g_test_param, ip) != 0) {
+        bsp_usart_printf(&s_usart1, "[NET] ERR: bad IP '%s'\r\n", g_test_param);
+        return;
+    }
+
+    {
+        uint8_t sn[4] = {255, 255, 255, 0};
+        uint8_t gw[4] = {192, 168, 0, 254};
+        wiz_set_ip(ip, sn, gw);
+        bsp_usart_printf(&s_usart1, "[NET] WIZnet => %d.%d.%d.%d\r\n",
+                         ip[0], ip[1], ip[2], ip[3]);
+    }
+}
+
+/**
+ * @brief  在线更改 WIZnet 远端目标 IP
+ *
+ * 指令格式：
+ *   $Test,NET,WIZ_REMOTE,192.168.1.200#
+ */
+static void net_set_remote_ip_handler(void)
+{
+    uint8_t ip[4];
+
+    if (g_test_sub[0] == '\0' ||
+        (str_icmp(g_test_sub, "WIZ_REMOTE") != 0)) {
+        bsp_usart_printf(&s_usart1, "[NET] ERR: need WIZ_REMOTE\r\n");
+        return;
+    }
+
+    if (g_test_param[0] == '\0' || parse_ip_dot(g_test_param, ip) != 0) {
+        bsp_usart_printf(&s_usart1, "[NET] ERR: bad IP '%s'\r\n", g_test_param);
+        return;
+    }
+
+    wiz_set_remote_ip(ip);
+    bsp_usart_printf(&s_usart1, "[NET] WIZnet remote => %d.%d.%d.%d\r\n",
+                     ip[0], ip[1], ip[2], ip[3]);
+}
+
+
+/* ============================================================================
  * 测试命令表
  * ============================================================================ */
 static const struct test_cmd_entry s_cmd_table[] = {
@@ -168,6 +258,10 @@ static const struct test_cmd_entry s_cmd_table[] = {
     {"SD",    "MKFILE", sd_test_mkfile},
     {"SD",    "LIST",   sd_test_list},
     {"SD",    "DELETE", sd_test_delete},
+    {"SD",    "PURE",   sd_test_pure},
+    {"SD",    "STRESS", sd_test_stress},
+    {"NET",   "WIZnet",   net_set_ip_handler},
+    {"NET",   "WIZ_REMOTE", net_set_remote_ip_handler},
 };
 
 static const uint8_t s_cmd_count =

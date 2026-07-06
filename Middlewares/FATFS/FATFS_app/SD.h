@@ -86,4 +86,34 @@ void sd_test_list(void);
 void sd_test_delete(void);
 
 
+/**
+ * @brief  纯函数 SD 功能测试（FATFS 写→读→子目录→删除→LIST）
+ * @note   支持串口指令: $Test,SD,PURE#
+ *         代码调用: sd_pure_test();
+ */
+void sd_pure_test(void);
+
+
+/**
+ * @brief  SDIO 低层级压力测试（sd_write_disk→sd_read_disk→校验循环）
+ * @param  sector 安全起始扇区（>=1000）
+ * @param  rounds 循环轮次
+ * @note   支持串口指令: $Test,SD,STRESS#（固定 1000 轮 @ sector 100000）
+ *         代码调用: sd_stress_test(100000, 1000);
+ */
+void sd_stress_test(uint32_t sector, int rounds);
+
+
+/**
+ * @brief  串口指令包装：$Test,SD,PURE#
+ */
+void sd_test_pure(void);
+
+
+/**
+ * @brief  串口指令包装：$Test,SD,STRESS#
+ */
+void sd_test_stress(void);
+
+
 #endif /* FATFS_SD_H */

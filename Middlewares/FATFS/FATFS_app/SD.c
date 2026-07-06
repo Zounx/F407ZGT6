@@ -1038,3 +1038,209 @@ void MDMA_IRQHandler(void)
 }
 
 #endif /* #if 0 — CSV 测试程序暂不启用 */
+
+
+/* ============================================================================
+ * sd_pure_test — FATFS 纯函数功能全面测试
+ *
+ * 串口指令: $Test,SD,PURE#
+ * 代码调用: sd_pure_test();
+ *
+ * 测试内容：写文件→读回校验→子目录→删除→LIST
+ * ============================================================================ */
+void sd_pure_test(void)
+{
+    char buf[512];
+    UINT  br;
+    int   res;
+    int   pass = 1;
+
+    /* [1] sd_write_file - write to root (全新文件名避免残留) */
+    bsp_usart_printf(&s_usart1, "[1] sd_write_file(\"0:/pure_write_test.txt\", \"HelloWorld\") = ");
+    res = sd_write_file("0:/pure_write_test.txt", "HelloWorld");
+    bsp_usart_printf(&s_usart1, "%d", res);
+    if (res != FR_OK) { bsp_usart_send_str(&s_usart1, " FAIL"); pass = 0; }
+    bsp_usart_send_str(&s_usart1, "\r\n");
+
+    /* [2] sd_read_file - read back and verify */
+    bsp_usart_printf(&s_usart1, "[2] sd_read_file(\"0:/pure_write_test.txt\") = ");
+    memset(buf, 0, sizeof(buf));
+    res = sd_read_file("0:/pure_write_test.txt", buf, sizeof(buf) - 1, &br);
+    bsp_usart_printf(&s_usart1, "res=%d, %u bytes: <%s>", res, br, buf);
+    if (res == FR_OK && br == 10 && memcmp(buf, "HelloWorld", 10) == 0)
+        bsp_usart_send_str(&s_usart1, " MATCH");
+    else
+        { bsp_usart_send_str(&s_usart1, " MISMATCH"); pass = 0; }
+    bsp_usart_send_str(&s_usart1, "\r\n");
+
+    /* [3] sd_write_file - write another file to root */
+    bsp_usart_printf(&s_usart1, "[3] sd_write_file(\"0:/pure_test2.txt\", \"Test2Data\") = ");
+    res = sd_write_file("0:/pure_test2.txt", "Test2Data");
+    bsp_usart_printf(&s_usart1, "%d", res);
+    if (res != FR_OK) { bsp_usart_send_str(&s_usart1, " FAIL"); pass = 0; }
+    bsp_usart_send_str(&s_usart1, "\r\n");
+
+    /* [4] sd_read_file - read second file */
+    bsp_usart_printf(&s_usart1, "[4] sd_read_file(\"0:/pure_test2.txt\") = ");
+    memset(buf, 0, sizeof(buf));
+    res = sd_read_file("0:/pure_test2.txt", buf, sizeof(buf) - 1, &br);
+    bsp_usart_printf(&s_usart1, "res=%d, %u bytes: <%s>", res, br, buf);
+    if (res == FR_OK && br == 9 && memcmp(buf, "Test2Data", 9) == 0)
+        bsp_usart_send_str(&s_usart1, " MATCH");
+    else
+        { bsp_usart_send_str(&s_usart1, " MISMATCH"); pass = 0; }
+    bsp_usart_send_str(&s_usart1, "\r\n");
+
+    /* [5] sd_mkdir + sd_write_file - write to subdir */
+    bsp_usart_printf(&s_usart1, "[5] sd_mkdir(\"0:/pure_sub\") = ");
+    res = sd_mkdir("0:/pure_sub");
+    bsp_usart_printf(&s_usart1, "%d", res);
+    if (res != FR_OK && res != FR_EXIST) { pass = 0; }
+    bsp_usart_printf(&s_usart1, "  sd_write_file(\"0:/pure_sub/data.txt\", \"1234567\") = ");
+    res = sd_write_file("0:/pure_sub/data.txt", "1234567");
+    bsp_usart_printf(&s_usart1, "%d", res);
+    if (res != FR_OK) { bsp_usart_send_str(&s_usart1, " FAIL"); pass = 0; }
+    bsp_usart_send_str(&s_usart1, "\r\n");
+
+    /* [6] sd_read_file - read subdir file */
+    bsp_usart_printf(&s_usart1, "[6] sd_read_file(\"0:/pure_sub/data.txt\") = ");
+    memset(buf, 0, sizeof(buf));
+    res = sd_read_file("0:/pure_sub/data.txt", buf, sizeof(buf) - 1, &br);
+    bsp_usart_printf(&s_usart1, "res=%d, %u bytes: <%s>", res, br, buf);
+    if (res == FR_OK && br == 7 && memcmp(buf, "1234567", 7) == 0)
+        bsp_usart_send_str(&s_usart1, " MATCH");
+    else
+        { bsp_usart_send_str(&s_usart1, " MISMATCH"); pass = 0; }
+    bsp_usart_send_str(&s_usart1, "\r\n");
+
+    /* [7] sd_mkdir - create another dir */
+    bsp_usart_printf(&s_usart1, "[7] sd_mkdir(\"0:/pure_other\") = ");
+    res = sd_mkdir("0:/pure_other");
+    bsp_usart_printf(&s_usart1, "%d\r\n", res);
+
+    /* [8] sd_mkfile - create empty file */
+    bsp_usart_printf(&s_usart1, "[8] sd_mkfile(\"0:/pure_empty.txt\") = ");
+    res = sd_mkfile("0:/pure_empty.txt");
+    bsp_usart_printf(&s_usart1, "%d\r\n", res);
+
+    /* [9] sd_mkfile - path not exist */
+    bsp_usart_printf(&s_usart1, "[9] sd_mkfile(\"0:/no_dir/x.txt\") = ");
+    res = sd_mkfile("0:/no_dir/x.txt");
+    bsp_usart_printf(&s_usart1, "%d (expect 5)\r\n", res);
+
+    /* [10] sd_list */
+    bsp_usart_send_str(&s_usart1, "[10] sd_list(\"0:/\"):\r\n");
+    sd_list("0:/");
+
+    /* [11] sd_delete subdir file */
+    bsp_usart_printf(&s_usart1, "[11] sd_delete(\"0:/pure_sub/data.txt\") = ");
+    res = sd_delete("0:/pure_sub/data.txt");
+    bsp_usart_printf(&s_usart1, "%d\r\n", res);
+
+    /* [12] sd_delete empty dir */
+    bsp_usart_printf(&s_usart1, "[12] sd_delete(\"0:/pure_sub\") = ");
+    res = sd_delete("0:/pure_sub");
+    bsp_usart_printf(&s_usart1, "%d\r\n", res);
+
+    /* [13] sd_delete non-empty dir (should fail) */
+    res = sd_mkfile("0:/pure_other/keep.txt");
+    bsp_usart_printf(&s_usart1, "[13] sd_mkfile(\"0:/pure_other/keep.txt\") = %d", res);
+    bsp_usart_printf(&s_usart1, "  then sd_delete(\"0:/pure_other\") = ");
+    res = sd_delete("0:/pure_other");
+    bsp_usart_printf(&s_usart1, "%d (expect 7)\r\n", res);
+
+    /* [14] final verify */
+    bsp_usart_send_str(&s_usart1, "[14] final sd_list(\"0:/\"):\r\n");
+    sd_list("0:/");
+
+    bsp_usart_printf(&s_usart1, "========== SD pure function test %s ==========\r\n",
+                     pass ? "PASSED" : "FAILED");
+}
+
+
+/* ============================================================================
+ * sd_stress_test — SDIO 低层级压力测试
+ *
+ * 串口指令: $Test,SD,STRESS#
+ * 代码调用: sd_stress_test(100000, 1000);
+ *
+ * 向安全扇区反复写→读→校验，测试 24MHz 4-bit DMA 稳定性。
+ * ============================================================================ */
+void sd_stress_test(uint32_t sector, int rounds)
+{
+    uint8_t wbuf[512], rbuf[512];
+    int i, r;
+    int fail = 0;
+    uint32_t start = HAL_GetTick();
+
+    bsp_usart_printf(&s_usart1, "\r\n===== SD STRESS TEST (%d rounds @ sector %lu) =====\r\n",
+                     rounds, (unsigned long)sector);
+
+    for (r = 0; r < rounds; r++)
+    {
+        for (i = 0; i < 512 / 4; i++)
+            ((uint32_t *)wbuf)[i] = 0xDEAD0000UL + (uint32_t)(r * 512 / 4 + i);
+
+        if (sd_write_disk(wbuf, sector + (r & 0x0F), 1) != 0)
+        {
+            bsp_usart_printf(&s_usart1, "[STRESS] WRITE FAIL at round %d\r\n", r);
+            fail = 1; break;
+        }
+
+        memset(rbuf, 0, sizeof(rbuf));
+        if (sd_read_disk(rbuf, sector + (r & 0x0F), 1) != 0)
+        {
+            bsp_usart_printf(&s_usart1, "[STRESS] READ FAIL at round %d\r\n", r);
+            fail = 1; break;
+        }
+
+        if (memcmp(wbuf, rbuf, 512) != 0)
+        {
+            bsp_usart_printf(&s_usart1, "[STRESS] DATA MISMATCH at round %d\r\n", r);
+            fail = 1; break;
+        }
+
+        if ((r % 100) == 99)
+            bsp_usart_printf(&s_usart1, "[STRESS] %d/%d rounds passed\r\n", r + 1, rounds);
+    }
+
+    if (!fail)
+        bsp_usart_printf(&s_usart1, "[STRESS] ALL %d rounds PASSED in %lu ms\r\n",
+                         rounds, (unsigned long)(HAL_GetTick() - start));
+    else
+        bsp_usart_printf(&s_usart1, "[STRESS] FAILED at round %d\r\n", r);
+}
+
+
+/* ============================================================================
+ * sd_test_pure — 串口指令 $Test,SD,PURE#
+ * ============================================================================ */
+void sd_test_pure(void)
+{
+    sd_pure_test();
+}
+
+
+/* ============================================================================
+ * sd_test_stress — 串口指令 $Test,SD,STRESS#
+ *
+ * 可选参数：$Test,SD,STRESS,轮数#
+ *   如 $Test,SD,STRESS,5000# 则跑 5000 轮
+ *   不指定轮数默认 10000 轮
+ * ============================================================================ */
+void sd_test_stress(void)
+{
+    int rounds = 10000;
+
+    if (g_test_param[0] != '\0')
+    {
+        int n = 0;
+        const char *p = g_test_param;
+        while (*p >= '0' && *p <= '9')
+            n = n * 10 + (int)(*p++ - '0');
+        if (n > 0)
+            rounds = n;
+    }
+
+    sd_stress_test(100000, rounds);
+}

@@ -14,4 +14,13 @@
 #include "scheduler.h"
 #include "ExtHardwareTest.h"
 #include "SD.h"
+#include "bsp_sdio_sd.h"
+#include "ETH_WIZdemo.h"
+#include "WIZnet_TcpClient.h"
+#include "WIZnet_TcpSever.h"
+#include "WIZnet_UDP.h"
+
+#include <string.h>
+#include <stdint.h>
+
 #endif /* __MAIN_H */

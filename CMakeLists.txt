@@ -45,6 +45,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/BSP/Include
     ${PROJECT_SOURCE_DIR}/Middlewares/FATFS/Include
     ${PROJECT_SOURCE_DIR}/Middlewares/FATFS/FATFS_app
+    ${PROJECT_SOURCE_DIR}/Middlewares/WIZnet/Include
+    ${PROJECT_SOURCE_DIR}/Middlewares/WIZnet/WIZnet_app
+    ${PROJECT_SOURCE_DIR}/APP/Communication/Include
     ${PROJECT_SOURCE_DIR}/Platform/STM32F4xx_HAL_Driver/Inc
     ${PROJECT_SOURCE_DIR}/Platform/STM32F4xx_HAL_Driver/Inc/Legacy
     ${PROJECT_SOURCE_DIR}/Platform/CMSIS/Device/ST/STM32F4xx/Include
@@ -126,6 +129,19 @@ set(FATFS_SOURCES
     Middlewares/FATFS/FATFS_app/SD.c
 )
 
+# --- WIZnet 中间件层 ---
+set(WIZNET_SOURCES
+    Middlewares/WIZnet/Source/w6100.c
+    Middlewares/WIZnet/Source/wiz_socket.c
+    Middlewares/WIZnet/Source/wizchip_conf.c
+    Middlewares/WIZnet/Source/wiz_loopback.c
+    Middlewares/WIZnet/WIZnet_app/spi_w6100.c
+    Middlewares/WIZnet/WIZnet_app/ETH_WIZdemo.c
+    APP/Communication/Source/WIZnet_TcpClient.c
+    APP/Communication/Source/WIZnet_UDP.c
+    APP/Communication/Source/WIZnet_TcpSever.c
+)
+
 # ============================================================================
 #  目标
 # ============================================================================
@@ -135,6 +151,7 @@ add_executable(${PROJECT_NAME}.elf
     ${BSP_SOURCES}
     ${USER_SOURCES}
     ${FATFS_SOURCES}
+    ${WIZNET_SOURCES}
     ${HAL_SOURCES}
 )
 

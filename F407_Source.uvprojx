@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F407xx, USE_HAL_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>User\Include;Platform\STM32F4xx_HAL_Driver\Inc;Platform\STM32F4xx_HAL_Driver\Inc\Legacy;Platform\CMSIS\Device\ST\STM32F4xx\Include;Platform\CMSIS\Core\Include;.\BSP\Include;.\Middlewares\FATFS\Include;.\Middlewares\FATFS\FATFS_app</IncludePath>
+              <IncludePath>User\Include;Platform\STM32F4xx_HAL_Driver\Inc;Platform\STM32F4xx_HAL_Driver\Inc\Legacy;Platform\CMSIS\Device\ST\STM32F4xx\Include;Platform\CMSIS\Core\Include;.\APP\Communication\Include;.\BSP\Include;.\Middlewares\FATFS\Include;.\Middlewares\FATFS\FATFS_app;.\Middlewares\WIZnet\Include;.\Middlewares\WIZnet\WIZnet_app</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -382,7 +382,36 @@
       </TargetOption>
       <Groups>
         <Group>
-          <GroupName>APP</GroupName>
+          <GroupName>Communication</GroupName>
+          <Files>
+            <File>
+              <FileName>WIZnet_TcpClient.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\APP\Communication\Source\WIZnet_TcpClient.c</FilePath>
+            </File>
+            <File>
+              <FileName>WIZnet_TcpSever.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\APP\Communication\Source\WIZnet_TcpSever.c</FilePath>
+            </File>
+            <File>
+              <FileName>WIZnet_UDP.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\APP\Communication\Source\WIZnet_UDP.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Control</GroupName>
+        </Group>
+        <Group>
+          <GroupName>Display</GroupName>
+        </Group>
+        <Group>
+          <GroupName>InAndOut</GroupName>
+        </Group>
+        <Group>
+          <GroupName>Profinet</GroupName>
         </Group>
         <Group>
           <GroupName>BSP</GroupName>
@@ -671,9 +700,43 @@
         </Group>
         <Group>
           <GroupName>Middlewares/WIZnet</GroupName>
+          <Files>
+            <File>
+              <FileName>w6100.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\WIZnet\Source\w6100.c</FilePath>
+            </File>
+            <File>
+              <FileName>wiz_loopback.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\WIZnet\Source\wiz_loopback.c</FilePath>
+            </File>
+            <File>
+              <FileName>wiz_socket.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\WIZnet\Source\wiz_socket.c</FilePath>
+            </File>
+            <File>
+              <FileName>wizchip_conf.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\WIZnet\Source\wizchip_conf.c</FilePath>
+            </File>
+          </Files>
         </Group>
         <Group>
           <GroupName>Middlewares/WIZnet/WIZnet_app</GroupName>
+          <Files>
+            <File>
+              <FileName>ETH_WIZdemo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\WIZnet\WIZnet_app\ETH_WIZdemo.c</FilePath>
+            </File>
+            <File>
+              <FileName>spi_w6100.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>.\Middlewares\WIZnet\WIZnet_app\spi_w6100.c</FilePath>
+            </File>
+          </Files>
         </Group>
         <Group>
           <GroupName>Startup</GroupName>

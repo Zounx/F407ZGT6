@@ -125,7 +125,7 @@ void HAL_SD_MspInit(SD_HandleTypeDef *hsd)
  *
  * 注意：初始化只做一次，第二次调用直接返回 0（跳过 HAL_SD_Init 重新卡识别）。
  * HAL_SD_Init 会发送 CMD0 复位卡，4-bit 模式会被破坏，后续再切 4-bit
- * 时序与第一次不一致导致失败。test_tx 也是仅初始化一次。
+ * 时序与第一次不一致导致失败。
  * ============================================================================ */
 uint8_t sd_init(void)
 {
@@ -140,7 +140,7 @@ uint8_t sd_init(void)
     g_sd_handle.Init.ClockPowerSave      = SDIO_CLOCK_POWER_SAVE_DISABLE;
     g_sd_handle.Init.BusWide             = SDIO_BUS_WIDE_1B;
     g_sd_handle.Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
-    g_sd_handle.Init.ClockDiv            = 1;  /* 48MHz / (1+2) = 16MHz，与 test_tx 一致 */
+    g_sd_handle.Init.ClockDiv            = 0;  /* 48MHz / (0+2) = 24MHz */
 
     if (HAL_SD_Init(&g_sd_handle) != HAL_OK) {
         bsp_usart_printf(&s_usart1, "[SD_DBG] HAL_SD_Init FAILED (err=0x%08lX)\r\n", g_sd_handle.ErrorCode);
@@ -152,7 +152,7 @@ uint8_t sd_init(void)
         bsp_usart_printf(&s_usart1, "[SD_DBG] ConfigWideBus FAILED (err=0x%08lX), stay 1-bit\r\n",
                          g_sd_handle.ErrorCode);
     } else {
-        bsp_usart_printf(&s_usart1, "[SD_DBG] 4-bit mode OK\r\n");
+        /* 4-bit mode OK (静默) */
     }
 
     if (HAL_SD_GetCardInfo(&g_sd_handle, &g_sd_card_info) != HAL_OK) {
@@ -167,8 +167,7 @@ uint8_t sd_init(void)
      * 参见 SDMMC_GetCmdResp1 的实现。 */
     __HAL_SD_CLEAR_FLAG(&g_sd_handle, SDIO_STATIC_FLAGS);
 
-    bsp_usart_printf(&s_usart1, "[SD_DBG] sd_init OK: type=%lu blk_nbr=%lu\r\n",
-                     g_sd_card_info.CardType, g_sd_card_info.LogBlockNbr);
+    /* sd_init OK (静默) */
     sd_initialized = 1;
     return 0;
 }
@@ -205,35 +204,44 @@ uint8_t sd_read_disk(uint8_t *buf, uint32_t sector, uint32_t cnt)
 
 
 /* ============================================================================
- * sd_write_disk — 写扇区（CPU 轮询模式，不用 DMA）
+ * sd_write_disk — 写扇区（DMA 模式）
  *
- * 使用 HAL_SD_WriteBlocks（轮询模式），写完后轮询 HAL_SD_GetCardState
- * 等待卡从 Programming 状态恢复到 Transfer 状态。
+ * 使用 HAL_SD_WriteBlocks_DMA，通过回调判定完成，写完后轮询卡状态。
  * ============================================================================ */
 uint8_t sd_write_disk(uint8_t *buf, uint32_t sector, uint32_t cnt)
 {
-    HAL_SD_CardStateTypeDef card_state;
+    uint32_t timeout;
 
     if ((cnt == 0) || (buf == NULL))
         return 1;
 
-    /* 清除残留标志（CMDREND 等），防止 HAL 内部命令响应检测读到旧值 */
+    g_sd_xfer_done = 0;
     SDIO->ICR = 0xFFFFFFFF;
 
-    if (HAL_SD_WriteBlocks(&g_sd_handle, buf, sector, cnt, 5000UL) != HAL_OK)
+    if (HAL_SD_WriteBlocks_DMA(&g_sd_handle, buf, sector, cnt) != HAL_OK)
     {
-        bsp_usart_printf(&s_usart1, "[SD_DBG] WriteBlocks FAIL: State=%ld Err=0x%08lX Ctx=0x%08lX\r\n",
-                         (long)g_sd_handle.State, (unsigned long)g_sd_handle.ErrorCode,
-                         (unsigned long)g_sd_handle.Context);
+        bsp_usart_printf(&s_usart1, "[SD_DBG] WriteBlocks_DMA FAIL: State=%ld Err=0x%08lX\r\n",
+                         (long)g_sd_handle.State, (unsigned long)g_sd_handle.ErrorCode);
         return 1;
+    }
+
+    timeout = HAL_GetTick();
+    while (g_sd_xfer_done == 0)
+    {
+        if ((HAL_GetTick() - timeout) > 5000UL)
+        {
+            bsp_usart_printf(&s_usart1, "[SD_DBG] Write DMA timeout NDTR=%lu\r\n",
+                             (unsigned long)g_sd_hdma_tx.Instance->NDTR);
+            return 1;
+        }
     }
 
     /* 写操作后卡进入 Programming 状态（DAT0 拉低），轮询等待卡就绪 */
     {
         uint32_t wait = HAL_GetTick();
+        HAL_SD_CardStateTypeDef card_state;
         do
         {
-            /* 清 ICR，确保 CMD13（GetCardState）的 CMDREND 干净 */
             SDIO->ICR = 0xFFFFFFFF;
             card_state = HAL_SD_GetCardState(&g_sd_handle);
             if (HAL_GetTick() - wait > 5000UL)
