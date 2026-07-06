@@ -6,20 +6,19 @@
   */
 
 #include "main.h"
+#include "bsp_sdio_sd.h"
 #include <string.h>
 
 /** USART1 对象定义（非 static，供 stm32f4xx_it.c 使用） */
 struct bsp_usart s_usart1;
 
-/* 纯函数 SD 测试 */
-static void sd_pure_test(void)
-{
-    char buf[128];
-    UINT  br;
-    int   res;
-    int   pass = 1;
-
-    bsp_usart_send_str(&s_usart1, "\r\n========== SD pure function test ==========\r\n");
+/* 纯函数 SD 测试 */  
+static void sd_pure_test(void)  
+{  
+    char buf[512];  
+    UINT  br;  
+    int   res;  
+    int   pass = 1;  
 
     /* [1] sd_write_file - write to root (全新文件名避免残留) */
     bsp_usart_printf(&s_usart1, "[1] sd_write_file(\"0:/pure_write_test.txt\", \"HelloWorld\") = ");
@@ -131,6 +130,10 @@ int main(void)
   /* HAL 库初始化 */
   HAL_Init();
 
+  /* NVIC 优先级分组：2 位抢占 + 2 位子优先级
+   * 必须 GROUP_2 才能让 SDIO(0) 优先级高于 DMA(2)，SDIO 工程即如此配置 */
+  HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_2);
+
   /* 调度器初始化（含系统时钟配置 HSE->PLL->168MHz） */
   scheduler_init();
 
@@ -146,8 +149,17 @@ int main(void)
   /* 初始化全部硬件定时器（TIM1~14），TIM6 为 1ms 心跳 */
   scheduler_tim_init();
 
-  sd_mount();
+  {
+      int mount_res = sd_mount();
+      bsp_usart_printf(&s_usart1, "[DBG] sd_mount() = %d\r\n", mount_res);
+  }
   sd_pure_test();
+
+  /* ---- DMA 诊断（使用安全扇区，不破坏文件系统） ---- */
+  bsp_usart_send_str(&s_usart1, "\r\n--- DMA diagnostic test ---\r\n");
+  sd_dma_full_test(100000);          /* 三路对比：PIO写 + DMA读 + PIO读 */
+  sd_dma_read_single_test(100001);   /* 写 PIO 基准 → DMA 读 → 对比 */
+  bsp_usart_send_str(&s_usart1, "\r\n");
 
   /* 主循环：调度器运行（TIM6 中断内轮询 USART + 测试命令） */
   while (1)

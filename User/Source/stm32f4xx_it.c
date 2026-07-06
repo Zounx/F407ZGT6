@@ -9,6 +9,7 @@
 #include "main.h"
 #include "stm32f4xx_it.h"
 #include "bsp_usart.h"
+#include "bsp_sdio_sd.h"
 
 /******************************************************************************/
 /*           Cortex-M4 Processor Exceptions Handlers                         */
@@ -134,4 +135,28 @@ void USART3_IRQHandler(void)
 void UART4_IRQHandler(void)
 {
     /* TODO: bsp_usart_irq_handler(&s_u4); */
+}
+
+/**
+ * @brief  SDIO 中断处理（Step2：调 HAL_SD_IRQHandler，仍 PIO 读写）
+ */
+void SDIO_IRQHandler(void)
+{
+    HAL_SD_IRQHandler(&g_sd_handle);
+}
+
+/**
+ * @brief  DMA2 Stream3 中断处理（SDIO RX — HAL SD DMA 模式必需）
+ */
+void DMA2_Stream3_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(&g_sd_hdma_rx);
+}
+
+/**
+ * @brief  DMA2 Stream6 中断处理（SDIO TX — HAL SD DMA 模式必需）
+ */
+void DMA2_Stream6_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(&g_sd_hdma_tx);
 }
