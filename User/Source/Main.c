@@ -6,6 +6,7 @@
   */
 
 #include "main.h"
+#include "fds_handler.h"
 
 /** USART1 对象定义（非 static，供 stm32f4xx_it.c 使用） */
 struct bsp_usart s_usart1;
@@ -48,15 +49,15 @@ int main(void)
         while (1);
     }
     /* WIZnet 通信应用初始化 */
-    ret = WIZnet_TcpSever_init();
-    if (ret != 0)
-        bsp_usart_printf(&s_usart1, "WIZ_TcpSever init failed!\r\n");
     ret = WIZnet_TcpClient_init();
     if (ret != 0)
         bsp_usart_printf(&s_usart1, "WIZ_TcpClient init failed!\r\n");
     ret = WIZnet_UDP_init();
     if (ret != 0)
         bsp_usart_printf(&s_usart1, "WIZ_UDP init failed!\r\n");
+
+    /* FDS 业务层初始化 */
+    HandlerInit();
   /* 主循环：调度器运行（TIM6 中断内轮询 USART + 测试命令）+ ETH 链路监测 */
   while (1)
   {

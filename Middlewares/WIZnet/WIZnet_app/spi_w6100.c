@@ -51,7 +51,7 @@ int w6100_spi_init(struct bsp_spi *me)
     /* ---- 时序：MODE0（CPOL=0, CPHA=0） ---- */
     me->cpol     = SPI_POLARITY_LOW;
     me->cpha     = SPI_PHASE_1EDGE;
-    /* 使用 64 分频（约 1.3MHz），与 test_tx 一致，降低速度确保信号稳定 */
+    /* 使用 64 分频（约 1.3MHz），降低速度确保信号稳定 */
     me->baud_prescaler = SPI_BAUDRATEPRESCALER_64;
 
     /* ---- 初始化 SPI1 ---- */
@@ -105,8 +105,8 @@ void w6100_cs_sel(void)
 {
     if (s_p_spi)
         bsp_spi_cs_set(s_p_spi, true);   /* CS 低 = 选中 */
-    /* CS 建立延时（参考 test_tx: eth_cs_delay 约 200 空循环） */
-    for (volatile int i = 0; i < 200; i++) {}
+    /* CS 建立延时 */
+    //for (volatile int i = 0; i < 200; i++) {}
 }
 
 void w6100_cs_desel(void)
@@ -128,7 +128,7 @@ void w6100_cs_desel(void)
 uint8_t w6100_spi_read_byte(void)
 {
     if (!s_p_spi) return 0xFF;
-    /* 参考 test_tx: 读数据阶段发 0x00 占位 */
+    /* 读数据阶段发 0x00 占位 */
     return bsp_spi_rw(s_p_spi, 0x00);
 }
 
@@ -175,7 +175,7 @@ void w6100_spi_write_burst(uint8_t *buf, int16_t len)
 
 
 /* ============================================================================
- * 直接寄存器 SPI 访问（绕过 HAL，与 test_tx 的 eth_spi_rw 完全一致）
+ * 直接寄存器 SPI 访问（绕过 HAL）
  *
  * 使用场景：诊断对比 — 如果此方式能正常写 Sn_MR，说明问题在 HAL 层；
  *          如果此方式也失败，说明问题在更底层的硬件 / 时序。
@@ -197,7 +197,7 @@ void w6100_cs_direct_sel(void)
 {
     /* GPIOA->BSRR bit set/reset: BR4=1 (reset/低) 选中 */
     GPIOA->BSRR = (uint32_t)(GPIO_PIN_4 << 16U);
-    /* CS 建立延时（与 test_tx 一致） */
+    /* CS 建立延时 */
     for (volatile int i = 0; i < 200; i++) {}
 }
 

@@ -137,9 +137,17 @@ set(WIZNET_SOURCES
     Middlewares/WIZnet/Source/wiz_loopback.c
     Middlewares/WIZnet/WIZnet_app/spi_w6100.c
     Middlewares/WIZnet/WIZnet_app/ETH_WIZdemo.c
-    APP/Communication/Source/WIZnet_TcpClient.c
-    APP/Communication/Source/WIZnet_UDP.c
-    APP/Communication/Source/WIZnet_TcpSever.c
+    Middlewares/WIZnet/WIZnet_app/WIZnet_TcpClient.c
+    Middlewares/WIZnet/WIZnet_app/WIZnet_TcpSever.c
+    Middlewares/WIZnet/WIZnet_app/WIZnet_UDP.c
+)
+
+# --- FDS 应用层 ---
+set(FDS_SOURCES
+    APP/Communication/Source/fds_data.c
+    APP/Communication/Source/fds_param.c
+    APP/Communication/Source/fds_protocol.c
+    APP/Communication/Source/fds_handler.c
 )
 
 # ============================================================================
@@ -152,6 +160,7 @@ add_executable(${PROJECT_NAME}.elf
     ${USER_SOURCES}
     ${FATFS_SOURCES}
     ${WIZNET_SOURCES}
+    ${FDS_SOURCES}
     ${HAL_SOURCES}
 )
 

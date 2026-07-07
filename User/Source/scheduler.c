@@ -2,9 +2,7 @@
 #include "bsp_tim.h"
 #include "bsp_usart.h"
 #include "ExtHardwareTest.h"
-#include "WIZnet_TcpClient.h"
-#include "WIZnet_UDP.h"
-#include "WIZnet_TcpSever.h"
+#include "fds_handler.h"
 
 /* 压制 GCC 10 对空数组初始化的 -Warray-bounds 假阳性警告 */
 #if defined(__GNUC__) && !defined(__ARMCC_VERSION)
@@ -77,11 +75,10 @@ static uint8_t task_num;      /**< 任务总数 */
  * @note   在此添加需要周期性执行的任务
  */
 static task_t scheduler_task[] = {
-	//{ext_hw_test_proc,10,0},
+	{ext_hw_test_proc,10,0},
 	{ETH_WIZdemo_task,1,0},
+	{HandlerTask,20,0},
 	{WIZnet_TcpClient_task,200,0},
-	{WIZnet_UDP_task,200,0},
-	{WIZnet_TcpSever_task,200,0},
 };
 
 
