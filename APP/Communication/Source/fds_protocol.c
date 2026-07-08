@@ -33,7 +33,8 @@ int ProtocolEncode(uint8_t *buf, int32_t function_id,
     hdr->body_length   = body_len;
 
     /* 填入 body */
-    if (body != NULL && body_len > 0) {
+    if (body != NULL && body_len > 0) 
+		{
         memcpy(buf + PACKET_HEADER_SIZE, body, body_len);
     }
 
@@ -74,9 +75,18 @@ int ProtocolDispatch(const uint8_t *buf, int32_t len,
     /* 解析头部 */
     if (ProtocolDecodeHeader(buf, len, &hdr) != 0) return -2;
 
+    /* 修正 body_length：头部声明的长度可能超出实际可用数据 */
+    if (hdr.body_length > len - PACKET_HEADER_SIZE) 
+		{
+        hdr.body_length = len - PACKET_HEADER_SIZE;
+        if (hdr.body_length < 0) hdr.body_length = 0;
+    }
+
     /* 查表分发 */
-    for (i = 0; i < table_size; i++) {
-        if (table[i].function_id == hdr.function_id) {
+    for (i = 0; i < table_size; i++) 
+	 {
+        if (table[i].function_id == hdr.function_id) 
+				{
             const uint8_t *body = (hdr.body_length > 0)
                                   ? buf + PACKET_HEADER_SIZE : NULL;
             table[i].handler(&hdr, body);

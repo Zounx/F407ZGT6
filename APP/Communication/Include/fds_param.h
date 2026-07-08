@@ -26,6 +26,7 @@ extern BackdoorParam_T       Global_BackdoorParam;      // 后门参数
 extern SystemParam_T         Global_SystemParam;        // 系统参数
 extern OpmaintInfo_T         Global_OpmaintInfo;        // 运维信息
 extern CurvePointData_T      Global_CurvePointData;    // 曲线数据点
+extern Datetime_T      			 Global_DateTime;          // 当前系统时间
 
 /* ============================================================================
  * 数组定义（程序存储区，对应 Excel "数组定义" sheet）
@@ -43,5 +44,6 @@ extern int32_t  Global_SystemState;                // 系统状态
 extern int32_t  Global_SystemModel;                // 系统模式
 extern int32_t  Global_LogicLock;                  // 逻辑锁
 extern int32_t  Global_ReadyState;                 // 准备信号
+
 
 #endif /* FDS_PARAM_H */

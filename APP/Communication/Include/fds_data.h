@@ -20,7 +20,7 @@
  * 常量定义
  * ============================================================================ */
 
-#define PROGRAM_NAME_LEN        40          // 程序名称最大长度
+#define PROGRAM_NAME_LEN        17          // 程序名称最大长度（协议定义）
 #define PROGRAM_LIST_MAX        128         // 程序列表最大数量
 #define CURVE_POINT_MAX         1000        // 曲线数据点最大数量
 #define PROGRAM_STEP_RESULT_INFOS_MAX         128         // 步骤结果最大数量
@@ -166,22 +166,27 @@ typedef struct ProgramStepJump {
     int8_t   jumpToCount;                       // 跳转计数
 } ProgramStepJump_T;
 
+// 程序步骤数据联合体（同一时刻只有一个步骤类型激活）
+typedef union {
+    ProgramStepMain_T                     psMain;               // 开始步骤
+    ProgramStepInput_T                    psInput;              // 输入步骤
+    ProgramStepFindSlot_T                 psFindSlot;           // 寻找插槽步骤
+    ProgramStepOutput_T                   psOutput;             // 输出步骤
+    ProgramStepFormFlowHole_T             psFormFlowHole;       // 形成流孔步骤
+    ProgramStepScrewIn_T                  psScrewIn;            // 旋入步骤
+    ProgramStepFinalTightening_T          psFinalTightening;    // 拧紧步骤
+    ProgramStepReturnScrewdriverStroke_T  psReturnScrewdriverStroke;  // 返回螺丝刀行程步骤
+    ProgramStepRetractJawStroke_T         psRetractJawStroke;         // 回缩钳口行程步骤
+    ProgramStepJump_T                     psJump;               // 跳转步骤
+} ProgramStepData_U;
+
 // 当前程序信息
 typedef struct CurrentProgramInfo {
-    int16_t  currentStep;                       // 当前步骤
-    int16_t  stepType;                          // 步骤类型
-    int16_t  stepState;                         // 步骤状态
-    int16_t  stepFlag;                          // 步骤标志
-    ProgramStepMain_T                psMain;               // 开始步骤
-    ProgramStepInput_T               psInput;              // 输入步骤
-    ProgramStepFindSlot_T            psFindSlot;           // 寻找插槽步骤
-    ProgramStepOutput_T              psOutput;             // 输出步骤
-    ProgramStepFormFlowHole_T        psFormFlowHole;       // 形成流孔步骤
-    ProgramStepScrewIn_T             psScrewIn;            // 旋入步骤
-    ProgramStepFinalTightening_T     psFinalTightening;    // 拧紧步骤
-    ProgramStepReturnScrewdriverStroke_T   psReturnScrewdriverStroke;  // 返回螺丝刀行程步骤
-    ProgramStepRetractJawStroke_T          psRetractJawStroke;         // 回缩钳口行程步骤
-    ProgramStepJump_T                psJump;               // 跳转步骤
+    int16_t           currentStep;                       // 当前步骤
+    int16_t           stepType;                          // 步骤类型
+    int16_t           stepState;                         // 步骤状态
+    int16_t           stepFlag;                          // 步骤标志
+    ProgramStepData_U stepData;                          // 步骤数据（联合体）
 } CurrentProgramInfo_T;
 
 // 程序执行步骤结果信息

@@ -21,6 +21,13 @@ void DataInit(void)
     memset(&Global_BackdoorParam,  0, sizeof(Global_BackdoorParam));
     memset(&Global_SystemParam,    0, sizeof(Global_SystemParam));
     memset(&Global_OpmaintInfo,    0, sizeof(Global_OpmaintInfo));
+    /* 测试初始值 */
+    Global_OpmaintInfo.accumulatedRunningTime       = 12345;    // 累计运行时间 12345s
+    Global_OpmaintInfo.cumulativeOperationTimes     = 6789;     // 累计操作 6789 次
+    Global_OpmaintInfo.suggestedReplaceBelt         = 100000;   // 建议更换同步带
+    Global_OpmaintInfo.accumulatedRunningTimeBelt   = 50000;    // 同步带已运行 50000s
+    Global_OpmaintInfo.suggestedReplaceLube         = 200000;   // 建议更换润滑油
+    Global_OpmaintInfo.accumulatedRunningTimeLube   = 80000;    // 润滑油已运行 80000s
     memset(&Global_CurvePointData,  0, sizeof(Global_CurvePointData));
     memset(Global_ProgramInfo,     0, sizeof(Global_ProgramInfo));
     memset(Global_ProgramInfoList, 0, sizeof(Global_ProgramInfoList));

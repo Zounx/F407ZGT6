@@ -29,9 +29,6 @@
 /** 发送缓冲区大小 */
 #define TX_BUF_SIZE     PACKET_MAX_SIZE
 
-/** 心跳发送间隔（ms） */
-#define HEARTBEAT_INTERVAL      1000
-
 /* ============================================================================
  * 内部变量
  * ============================================================================ */
@@ -39,8 +36,11 @@
 /** 接收数据缓冲区 */
 static uint8_t s_rx_buf[RX_BUF_SIZE];
 
-/** 已接收但尚未处理的数据长度 */
-static int32_t s_rx_len;
+/** 接收缓冲区读指针 */
+static int32_t s_rx_rd;
+
+/** 接收缓冲区写指针 */
+static int32_t s_rx_wr;
 
 /** 发送缓冲区 */
 static uint8_t s_tx_buf[TX_BUF_SIZE];
@@ -48,8 +48,11 @@ static uint8_t s_tx_buf[TX_BUF_SIZE];
 /** requestId 递增计数器 */
 static int32_t s_request_id;
 
-/** 上次心跳发送时间戳 */
-static uint32_t s_last_heartbeat_tick;
+/** 是否已订阅实时数值 */
+static int32_t s_subscribed;
+
+/** 上次实时数值推送时间戳 */
+static uint32_t s_last_current_values_tick;
 
 /* ============================================================================
  * 内部函数前置声明
@@ -58,29 +61,44 @@ static uint32_t s_last_heartbeat_tick;
 static void SendResponse(int32_t function_id, int32_t request_id,
                           const void *body, int32_t body_len);
 
+/** Heartbeat-发送心跳 */
+void PushHeartbeat(void);
+
+/** SendSystemStateInfos-发送系统状态信息 */
+void PushSystemState(void);
+
+/** SendSystemErrorInfos-发送报警信息 */
+void PushSystemError(int32_t errorType, int32_t errorCode);
+
+/** SendProgramStepResultInfos-发送程序执行步骤结果信息 */
+void PushStepResult(void);
+
+/** RspCurrentValues-当前实时数值响应 */
+void PushCurrentValues(void);
+
 /* ============================================================================
  * Handler 函数实现
  * ============================================================================ */
 
-/** 后门参数设置 */
+/** RspSetBackDoorParameter-后门参数设置 */
 static void handle_set_backdoor_param(const struct PacketHeader *hdr,
                                        const uint8_t *body)
 {
     ETH_DEBUG("[FDS] SetBackDoorParam (fid=%d)\r\n", hdr->function_id);
-    /* TODO: 解析 body 中的系列型号/序列号/固件版本等 */
-    if (body != NULL && hdr->body_length >= (int32_t)sizeof(BackdoorParam_T)) {
+    if (body != NULL && hdr->body_length >= (int32_t)sizeof(BackdoorParam_T)) 
+		{
         const BackdoorParam_T *p = (const void *)body;
         memcpy(&Global_BackdoorParam, p, sizeof(BackdoorParam_T));
     }
     {
-        int32_t result = 1; /* 先返回成功 */
+        int32_t result = 1;
         Result_T rsp = {result};
         SendResponse(FID_RSP_SET_BACKDOOR_PARAM, hdr->request_id,
                      &rsp, sizeof(rsp));
     }
 }
 
-/** 后门参数获取 */
+/** RspSetBackDoorParameter-后门参数获取 */
 static void handle_get_backdoor_param(const struct PacketHeader *hdr,
                                        const uint8_t *body)
 {
@@ -91,14 +109,14 @@ static void handle_get_backdoor_param(const struct PacketHeader *hdr,
     }
 }
 
-/** 系统参数设置 */
+/** RspSetSystemParameter-系统参数设置 */
 static void handle_set_system_param(const struct PacketHeader *hdr,
                                      const uint8_t *body)
 {
     ETH_DEBUG("[FDS] SetSystemParam (fid=%d)\r\n", hdr->function_id);
-    if (body != NULL && hdr->body_length >= (int32_t)sizeof(SystemParam_T)) {
+    if (body != NULL && hdr->body_length >= (int32_t)sizeof(SystemParam_T)) 
+		{
         const SystemParam_T *p = (const void *)body;
-        /* TODO: 更新系统参数到数据结构 */
         memcpy(&Global_SystemParam, p, sizeof(SystemParam_T));
     }
     {
@@ -109,7 +127,7 @@ static void handle_set_system_param(const struct PacketHeader *hdr,
     }
 }
 
-/** 系统参数获取 */
+/** RspSetSystemParameter-系统参数获取 */
 static void handle_get_system_param(const struct PacketHeader *hdr,
                                      const uint8_t *body)
 {
@@ -120,20 +138,21 @@ static void handle_get_system_param(const struct PacketHeader *hdr,
     }
 }
 
-/** 运维信息设置 */
+/** RspSetOperationalMaintenanceInfo-运维信息设置 */
 static void handle_set_opmaint(const struct PacketHeader *hdr,
                                 const uint8_t *body)
 {
     ETH_DEBUG("[FDS] SetOpmaintInfo (fid=%d)\r\n", hdr->function_id);
-    if (body != NULL && hdr->body_length >= (int32_t)sizeof(OpmaintSet_T)) {
+    if (body != NULL && hdr->body_length >= (int32_t)sizeof(OpmaintSet_T)) 
+		{
         const OpmaintSet_T *p = (const void *)body;
-        if (p->dataType == 1) {
-            /* 清除同步带计数 */
+        if (p->dataType == 1) 
+				{
             Global_OpmaintInfo.suggestedReplaceBelt     = 0;
             Global_OpmaintInfo.accumulatedRunningTimeBelt = 0;
             ETH_DEBUG("[FDS] Clear belt counters\r\n");
-        } else if (p->dataType == 2) {
-            /* 清除润滑油计数 */
+        } else if (p->dataType == 2) 
+				{
             Global_OpmaintInfo.suggestedReplaceLube     = 0;
             Global_OpmaintInfo.accumulatedRunningTimeLube = 0;
             ETH_DEBUG("[FDS] Clear lube counters\r\n");
@@ -147,7 +166,7 @@ static void handle_set_opmaint(const struct PacketHeader *hdr,
     }
 }
 
-/** 运维信息获取 */
+/** RspSetOperationalMaintenanceInfo-运维信息获取 */
 static void handle_get_opmaint(const struct PacketHeader *hdr,
                                 const uint8_t *body)
 {
@@ -159,47 +178,22 @@ static void handle_get_opmaint(const struct PacketHeader *hdr,
     }
 }
 
-/** 时间同步 */
-static void handle_sync_time(const struct PacketHeader *hdr,
-                              const uint8_t *body)
-{
-    ETH_DEBUG("[FDS] SyncTime (fid=%d)\r\n", hdr->function_id);
-    if (body != NULL && hdr->body_length >= (int32_t)sizeof(Datetime_T)) {
-        const Datetime_T *dt = (const void *)body;
-        /* TODO: 设置 RTC 时间 */
-        /* TODO: 回传同步后的时间 */
-        (void)dt;
-    }
-    {
-        int32_t result = 1;
-        Result_T rsp = {result};
-        SendResponse(FID_RSP_SYNC_TIME, hdr->request_id,
-                     &rsp, sizeof(rsp));
-    }
-}
-
-/** IO 状态获取 */
-static void handle_get_io_state(const struct PacketHeader *hdr,
-                                 const uint8_t *body)
-{
-    ETH_DEBUG("[FDS] GetIOState (fid=%d)\r\n", hdr->function_id);
-    /* TODO: 采集当前 IO 状态并回传 */
-    {
-        IoState_T rsp;
-        memset(&rsp, 0, sizeof(rsp));
-        rsp.ioInputState  = 0;
-        rsp.ioOutputState = 0;
-        SendResponse(FID_RSP_GET_IO_STATE, hdr->request_id,
-                     &rsp, sizeof(rsp));
-    }
-}
-
-/** 程序保存 */
+/** RspSaveProgramInfo-程序保存 */
 static void handle_save_program(const struct PacketHeader *hdr,
                                  const uint8_t *body)
 {
     ETH_DEBUG("[FDS] SaveProgram (len=%d)\r\n", hdr->body_length);
-    /* TODO: 解析程序数据并保存到 Flash/SD */
+    if (body != NULL && hdr->body_length > 0) 
+		{
+        int32_t copy_len = hdr->body_length;
+        if (copy_len > (int32_t)sizeof(Global_ProgramInfo)) 
+				{
+            copy_len = (int32_t)sizeof(Global_ProgramInfo);
+        }
+        memset(Global_ProgramInfo, 0, sizeof(Global_ProgramInfo));
+        memcpy(Global_ProgramInfo, body, copy_len);
+        ETH_DEBUG("[FDS] Program saved (%d bytes)\r\n", copy_len);
+    }
     {
         int32_t result = 1;
         Result_T rsp = {result};
@@ -208,42 +202,91 @@ static void handle_save_program(const struct PacketHeader *hdr,
     }
 }
 
-/** 程序列表获取 */
+/** RspGetProgramListInfos-程序列表信息获取 */
 static void handle_get_program_list(const struct PacketHeader *hdr,
                                      const uint8_t *body)
 {
     ETH_DEBUG("[FDS] GetProgramList\r\n");
-    /* TODO: 回传程序列表 */
-    {
-        int32_t result = 1;
-        Result_T rsp = {result};
-        SendResponse(FID_RSP_GET_PROGRAM_LIST, hdr->request_id,
-                     &rsp, sizeof(rsp));
-    }
+    (void)body;
+    SendResponse(FID_RSP_GET_PROGRAM_LIST, hdr->request_id,
+                 Global_ProgramInfoList, sizeof(Global_ProgramInfoList));
 }
 
-/** 程序获取 */
+/** RspGetProgram-程序信息获取 */
 static void handle_get_program(const struct PacketHeader *hdr,
                                 const uint8_t *body)
 {
     ETH_DEBUG("[FDS] GetProgram\r\n");
-    /* TODO: 回传指定程序数据 */
+    (void)body;
+    SendResponse(FID_RSP_GET_PROGRAM, hdr->request_id,
+                 Global_ProgramInfo, sizeof(Global_ProgramInfo));
+}
+
+/** ReqGetIOStateInfos-IO 状态信息获取 */
+static void handle_get_io_state(const struct PacketHeader *hdr,
+                                 const uint8_t *body)
+{
+    ETH_DEBUG("[FDS] GetIOState (fid=%d)\r\n", hdr->function_id);
     {
-        int32_t result = 1;
-        Result_T rsp = {result};
-        SendResponse(FID_RSP_GET_PROGRAM, hdr->request_id,
+        IoState_T rsp;
+        memset(&rsp, 0, sizeof(rsp));
+        SendResponse(FID_RSP_GET_IO_STATE, hdr->request_id,
                      &rsp, sizeof(rsp));
     }
 }
 
-/** 伺服旋转 */
+/** RspSynchronizeTime-时间同步 */
+static void handle_sync_time(const struct PacketHeader *hdr,
+                              const uint8_t *body)
+{
+    ETH_DEBUG("[FDS] SyncTime (fid=%d)\r\n", hdr->function_id);
+
+    if (body != NULL && hdr->body_length >= (int32_t)sizeof(Datetime_T)) 
+		{
+        memcpy(&Global_DateTime, body, sizeof(Datetime_T));
+    }
+
+    {
+        /* 响应结构：result(4B) + Datetime_T(24B) */
+        uint8_t rsp_buf[sizeof(int32_t) + sizeof(Datetime_T)];
+        *(int32_t *)rsp_buf = 1;  /* result = success */
+        memcpy(rsp_buf + sizeof(int32_t), &Global_DateTime, sizeof(Datetime_T));
+        SendResponse(FID_RSP_SYNC_TIME, hdr->request_id,
+                     rsp_buf, sizeof(rsp_buf));
+    }
+}
+
+/** RspGetSystemDatetime-系统时间获取 */
+static void handle_get_datetime(const struct PacketHeader *hdr,
+                                 const uint8_t *body)
+{
+    ETH_DEBUG("[FDS] GetDatetime\r\n");
+    {
+        SendResponse(FID_RSP_GET_DATETIME, hdr->request_id,
+                     &Global_DateTime, sizeof(Global_DateTime));
+    }
+}
+
+/** RspGetCurvePointDatas-曲线数据获取 */
+static void handle_get_curve(const struct PacketHeader *hdr,
+                              const uint8_t *body)
+{
+    ETH_DEBUG("[FDS] GetCurvePoints (index=%ld)\r\n",
+              body ? *(const int32_t *)body : -1);
+    {
+        SendResponse(FID_RSP_GET_CURVE_POINTS, hdr->request_id,
+                     &Global_CurvePointData, sizeof(Global_CurvePointData));
+    }
+}
+
+/** RspControlServoTurn-控制电机旋转 */
 static void handle_servo_turn(const struct PacketHeader *hdr,
                                const uint8_t *body)
 {
     ETH_DEBUG("[FDS] ServoTurn\r\n");
-    if (body != NULL && hdr->body_length >= (int32_t)sizeof(ServoTurn_T)) {
+    if (body != NULL && hdr->body_length >= (int32_t)sizeof(ServoTurn_T)) 
+		{
         const ServoTurn_T *s = (const void *)body;
-        /* TODO: 控制伺服电机 */
         (void)s;
     }
     {
@@ -254,12 +297,11 @@ static void handle_servo_turn(const struct PacketHeader *hdr,
     }
 }
 
-/** 伺服停止 */
+/** RspControlServoStop-控制电机停止 */
 static void handle_servo_stop(const struct PacketHeader *hdr,
                                const uint8_t *body)
 {
     ETH_DEBUG("[FDS] ServoStop\r\n");
-    /* TODO: 停止伺服 */
     {
         int32_t result = 1;
         Result_T rsp = {result};
@@ -268,17 +310,21 @@ static void handle_servo_stop(const struct PacketHeader *hdr,
     }
 }
 
-/** 气缸控制通用处理 */
+/** 气缸控制适配器wrapper */
 static void handle_cylinder_ctrl(const struct PacketHeader *hdr,
                                   const uint8_t *body,
                                   int32_t rsp_fid,
                                   const char *name)
 {
     ETH_DEBUG("[FDS] %s\r\n", name);
-    if (body != NULL && hdr->body_length >= (int32_t)sizeof(CylinderCtrl_T)) {
-        const CylinderCtrl_T *c = (const void *)body;
-        /* TODO: 控制气缸 */
-        (void)c;
+    if (body != NULL && hdr->body_length >= (int32_t)sizeof(int32_t)) 
+		{
+        int32_t direction = *(const int32_t *)body;
+        ETH_DEBUG(" direction=%ld\r\n", direction);
+        if (hdr->body_length >= (int32_t)sizeof(CylinderCtrl_T)) {
+            const CylinderCtrl_T *c = (const void *)body;
+            (void)c;
+        }
     }
     {
         int32_t result = 1;
@@ -286,50 +332,81 @@ static void handle_cylinder_ctrl(const struct PacketHeader *hdr,
         SendResponse(rsp_fid, hdr->request_id, &rsp, sizeof(rsp));
     }
 }
+/** 把具体气缸 ID（148/NOK、150/螺丝刀、152/钳口）映射到通用处理函数 */
+/** ReqControlNOKCylinder-nok气缸控制 */
 static void handle_nok_cylinder(const struct PacketHeader *hdr,
                                  const uint8_t *body)
 { handle_cylinder_ctrl(hdr, body, FID_RSP_NOK_CYLINDER, "NOKCylinder"); }
+
+/** RspControlScrewdriverCylinder-螺丝刀气缸控制 */
 static void handle_screwdriver_cylinder(const struct PacketHeader *hdr,
                                          const uint8_t *body)
 { handle_cylinder_ctrl(hdr, body, FID_RSP_SCREWDRIVER_CYLINDER, "ScrewdriverCylinder"); }
+
+/** ReqControlFeedStrokeCylinder-钳口气缸控制 */
 static void handle_feedstroke_cylinder(const struct PacketHeader *hdr,
                                         const uint8_t *body)
 { handle_cylinder_ctrl(hdr, body, FID_RSP_FEEDSTROKE_CYLINDER, "FeedStrokeCylinder"); }
 
-/** 订阅实时数值 */
+/** ReqSubCurrentValues-订阅当前实时数值 */
 static void handle_sub_current_values(const struct PacketHeader *hdr,
                                        const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] SubCurrentValues\r\n");
-    /* TODO: 处理订阅/取消订阅 */
-}
-
-/** 曲线获取 */
-static void handle_get_curve(const struct PacketHeader *hdr,
-                              const uint8_t *body)
-{
-    ETH_DEBUG("[FDS] GetCurvePoints\r\n");
-    /* TODO: 回传曲线数据 */
-    {
-        int32_t result = 1;
-        Result_T rsp = {result};
-        SendResponse(FID_RSP_GET_CURVE_POINTS, hdr->request_id,
-                     &rsp, sizeof(rsp));
+    if (body != NULL && hdr->body_length >= (int32_t)sizeof(int32_t)) {
+        int32_t subType = *(const int32_t *)body;
+        s_subscribed = (subType == 1) ? 1 : 0;
+        ETH_DEBUG("[FDS] SubCurrentValues subType=%ld subscribed=%d\r\n",
+                  subType, s_subscribed);
     }
 }
-
-/** 时间获取 */
-static void handle_get_datetime(const struct PacketHeader *hdr,
-                                 const uint8_t *body)
+/* ============================================================================
+ * 推送函数实现
+ * ============================================================================ */
+/** Heartbeat-心跳 */
+void PushHeartbeat(void)
 {
-    ETH_DEBUG("[FDS] GetDatetime\r\n");
-    {
-        Datetime_T rsp;
-        memset(&rsp, 0, sizeof(rsp));
-        /* TODO: 读取 RTC */
-        SendResponse(FID_RSP_GET_DATETIME, hdr->request_id,
-                     &rsp, sizeof(rsp));
-    }
+    Heartbeat_T body = {(int32_t)HAL_GetTick()};
+    SendResponse(FID_HEARTBEAT, 0, &body, sizeof(body));
+}
+
+/** 推送系统状态 */
+void PushSystemState(void)
+{
+    SysStatePush_T state;
+    state.logicLock    = Global_LogicLock;
+    state.systemModel  = Global_SystemModel;
+    state.readyState   = Global_ReadyState;
+    state.systemState  = Global_SystemState;
+    SendResponse(FID_SEND_SYSTEM_STATE, 0, &state, sizeof(state));
+}
+
+/** 推送报警信息 */
+void PushSystemError(int32_t errorType, int32_t errorCode)
+{
+    SysError_T err;
+    err.errorType = errorType;
+    err.errorCode = errorCode;
+    SendResponse(FID_SEND_SYSTEM_ERROR, 0, &err, sizeof(err));
+}
+
+/** 推送程序执行步骤结果 */
+void PushStepResult(void)
+{
+    SendResponse(FID_SEND_STEP_RESULT, 0, Global_ProgramStepResultInfos,
+                 sizeof(Global_ProgramStepResultInfos));
+}
+
+/** 推送实时数值 */
+void PushCurrentValues(void)
+{
+    CurrentValues_T vals;
+    memset(&vals, 0, sizeof(vals));
+    /* TODO: 读取实际硬件值 */
+    vals.servoRpmSpeed     = 100;
+    vals.servoTorque       = 200;
+    vals.servoAngle        = 300;
+    vals.cylinderPosition  = 400;
+    SendResponse(FID_RSP_CURRENT_VALUES, 0, &vals, sizeof(vals));
 }
 
 /* ============================================================================
@@ -391,81 +468,93 @@ static void SendResponse(int32_t function_id, int32_t request_id,
                           const void *body, int32_t body_len)
 {
     int total_len;
+    uint8_t sn = HANDLER_SOCKET;
 
     total_len = ProtocolEncode(s_tx_buf, function_id, request_id,
                                body, body_len);
-    if (total_len > 0) {
-        uint8_t status = getSn_SR(HANDLER_SOCKET);
-        if (status == SOCK_ESTABLISHED) {
-            /* 临时切非阻塞 */
-            uint8_t nb = SOCK_IO_NONBLOCK;
-            wiz_ctlsocket(HANDLER_SOCKET, CS_SET_IOMODE, &nb);
-            int32_t ret = wiz_send(HANDLER_SOCKET, s_tx_buf, (uint16_t)total_len);
-            ETH_DEBUG("[FDS] wiz_send=%d (fid=%d, len=%d)\r\n",
-                      ret, function_id, total_len);
-        } else {
-            ETH_DEBUG("[FDS] skip send, status=0x%02x\r\n", status);
+    if (total_len > 0) 
+		{
+        uint8_t status = getSn_SR(sn);
+        if (status == SOCK_ESTABLISHED) 
+				{
+            wiz_send(sn, s_tx_buf, (uint16_t)total_len);
         }
-    } else {
-        ETH_DEBUG("[FDS] ProtocolEncode FAILED (fid=%d)\r\n", function_id);
     }
 }
 
 /**
  * @brief  尝试从 TCP Server socket 接收数据并分发
+ *
+ * 使用读写指针管理缓冲区，避免频繁 memmove。
  */
 static void RecvAndDispatch(void)
 {
     int32_t recv_len;
+    int32_t data_len;
     int32_t total_len;
     struct PacketHeader hdr;
 
-    if (s_rx_len >= RX_BUF_SIZE) {
-        /* 缓冲区满，丢弃全部数据防止死锁 */
-        ETH_DEBUG("[FDS] RX buf overflow, flushing\r\n");
-        s_rx_len = 0;
+    /*
+     * 循环读取：W6100 可能将 TCP 数据分多次交付（每次 ~37 字节），
+     * 必须一次性读完所有可用数据，避免缓冲区残留导致后续包无法拼完整。
+     */
+    for (;;) {
+        /* 缓冲区尾部空间不足时，将未处理数据移到头部 */
+        if (s_rx_wr + PACKET_HEADER_SIZE > RX_BUF_SIZE) 
+				{
+            int32_t remaining = s_rx_wr - s_rx_rd;
+            if (remaining > 0 && remaining < (int32_t)sizeof(s_rx_buf)) 
+						{
+                memmove(s_rx_buf, s_rx_buf + s_rx_rd, remaining);
+            }
+            s_rx_rd = 0;
+            s_rx_wr = remaining;
+        }
+
+        if (s_rx_wr >= RX_BUF_SIZE) break;
+
+        recv_len = wiz_recv(HANDLER_SOCKET, s_rx_buf + s_rx_wr,
+                            RX_BUF_SIZE - s_rx_wr);
+        if (recv_len <= 0) break;
+
+        s_rx_wr += recv_len;
     }
 
-    /* 尝试接收新数据 */
-    recv_len = wiz_recv(HANDLER_SOCKET, s_rx_buf + s_rx_len,
-                        RX_BUF_SIZE - s_rx_len);
-    if (recv_len <= 0) return;
-
-    s_rx_len += recv_len;
+    data_len = s_rx_wr - s_rx_rd;
+    if (data_len < PACKET_HEADER_SIZE) return;
 
     /* 循环解析缓冲区中的所有完整报文 */
-    while (s_rx_len >= PACKET_HEADER_SIZE) {
-        /* 尝试解析头部 */
-        if (ProtocolDecodeHeader(s_rx_buf, s_rx_len, &hdr) != 0) {
-            /* 数据不足以构成完整报文，等待更多数据 */
-            if (s_rx_len >= PACKET_HEADER_SIZE) {
-                /* 数据错位，逐字节丢弃直到对齐 */
-                s_rx_len -= 1;
-                memmove(s_rx_buf, s_rx_buf + 1, s_rx_len);
-                continue;
-            }
-            break;
+    while (data_len >= PACKET_HEADER_SIZE) 
+		{
+        if (ProtocolDecodeHeader(s_rx_buf + s_rx_rd, data_len, &hdr) != 0) 
+				{
+            s_rx_rd++;
+            data_len--;
+            continue;
         }
 
         total_len = hdr.packet_length;
-
-        if (s_rx_len < total_len) {
-            /* 还没有收完整个报文，等待剩余数据 */
-            break;
+        if (data_len < total_len) 
+				{
+            /* 头部声明的包长大于实际可用数据：截断到实际数据，避免 advance 越界 */
+            total_len = data_len;
         }
 
         ETH_DEBUG("[FDS] Dispatch FID=%ld (len=%ld)\r\n",
                   hdr.function_id, total_len);
 
-        /* 分发完整报文 */
-        ProtocolDispatch(s_rx_buf, total_len,
+        ProtocolDispatch(s_rx_buf + s_rx_rd, total_len,
                          s_dispatch_table, s_dispatch_table_size);
 
-        /* 移除已处理的报文 */
-        s_rx_len -= total_len;
-        if (s_rx_len > 0) {
-            memmove(s_rx_buf, s_rx_buf + total_len, s_rx_len);
-        }
+        s_rx_rd += total_len;
+        data_len -= total_len;
+    }
+
+    /* 全部处理完则重置指针 */
+    if (s_rx_rd >= s_rx_wr) 
+		{
+        s_rx_rd = 0;
+        s_rx_wr = 0;
     }
 }
 
@@ -475,53 +564,66 @@ static void RecvAndDispatch(void)
 
 void HandlerInit(void)
 {
-    /* 初始化数据层 */
     DataInit();
 
-    /* 清空接收缓冲区 */
-    s_rx_len = 0;
+    s_rx_rd = 0;
+    s_rx_wr = 0;
     s_request_id = 0;
-    (void)s_request_id;     /* 预留：下位机主动推送时使用 */
-    s_last_heartbeat_tick = 0;
+    (void)s_request_id;
+    s_subscribed           = 0;
+    s_last_current_values_tick = 0;
 
-    /* 打开 TCP Server socket 0 */
-    wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK);
+    wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
     wiz_listen(HANDLER_SOCKET);
 
     ETH_DEBUG("[FDS] Handler initialized, TCP Server listening on port %d\r\n",
               HANDLER_PORT);
+
+
 }
 
 void HandlerTask(void)
 {
     uint8_t status;
 
-    /* 检查 TCP Server socket 状态 */
     status = getSn_SR(HANDLER_SOCKET);
 
-    if (status == SOCK_ESTABLISHED) {
-        /* 有客户端连接，接收并处理数据 */
+    if (status == SOCK_ESTABLISHED) 
+		{
         RecvAndDispatch();
+    }
 
-        /* 周期心跳：设备主动发送保活信号 */
-        if (HAL_GetTick() - s_last_heartbeat_tick >= HEARTBEAT_INTERVAL) {
-            s_last_heartbeat_tick = HAL_GetTick();
-            Heartbeat_T body = {(int32_t)HAL_GetTick()};
-            SendResponse(FID_HEARTBEAT, 0, &body, sizeof(body));
+    /* 已订阅时，1s 周期性推送实时数值 */
+    if (s_subscribed && status == SOCK_ESTABLISHED) {
+        if (HAL_GetTick() - s_last_current_values_tick >= 1000) {
+            s_last_current_values_tick = HAL_GetTick();
+            PushCurrentValues();
         }
-    } else if (status == SOCK_CLOSE_WAIT) {
-        /* 客户端断开，重新监听 */
+    }
+
+//    /* 测试：2s 周期性推送步骤结果 */
+//    if (status == SOCK_ESTABLISHED) {
+//        static uint32_t s_last_test_push_tick = 0;
+//        if (HAL_GetTick() - s_last_test_push_tick >= 2000) {
+//            s_last_test_push_tick = HAL_GetTick();
+//            PushStepResult();
+//        }
+//    }
+
+    if (status == SOCK_CLOSE_WAIT) 
+		{
         wiz_close(HANDLER_SOCKET);
-        wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK);
+        wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
         wiz_listen(HANDLER_SOCKET);
-        s_rx_len = 0;
+        s_rx_rd = 0;
+        s_rx_wr = 0;
         ETH_DEBUG("[FDS] Client disconnected, re-listening\r\n");
-    } else if (status == SOCK_CLOSED) {
-        /* 首次启动或 socket 异常关闭，重新打开 */
-        wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK);
+    } else if (status == SOCK_CLOSED) 
+		{
+        wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
         wiz_listen(HANDLER_SOCKET);
-        s_rx_len = 0;
+        s_rx_rd = 0;
+        s_rx_wr = 0;
         ETH_DEBUG("[FDS] Socket reopened, listening\r\n");
     }
-    /* 其他状态（LISTEN/INIT 等）不处理 */
 }

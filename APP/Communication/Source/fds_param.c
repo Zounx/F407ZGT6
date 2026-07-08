@@ -20,6 +20,7 @@ BackdoorParam_T       Global_BackdoorParam;           // 后门参数
 SystemParam_T         Global_SystemParam;             // 系统参数
 OpmaintInfo_T         Global_OpmaintInfo;           // 运维信息
 CurvePointData_T      Global_CurvePointData;         // 曲线数据点
+Datetime_T    				Global_DateTime;               // 当前系统时间
 
 /* ============================================================================
  * 数组定义（程序存储区）
@@ -37,3 +38,5 @@ int32_t  Global_SystemState;                              // 系统状态
 int32_t  Global_SystemModel;                              // 系统模式
 int32_t  Global_LogicLock;                                // 逻辑锁
 int32_t  Global_ReadyState;                               // 准备信号
+
+

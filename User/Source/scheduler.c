@@ -77,8 +77,9 @@ static uint8_t task_num;      /**< 任务总数 */
 static task_t scheduler_task[] = {
 	{ext_hw_test_proc,10,0},
 	{ETH_WIZdemo_task,1,0},
+	{PushHeartbeat,1000,0},
 	{HandlerTask,20,0},
-	{WIZnet_TcpClient_task,200,0},
+	//{WIZnet_TcpClient_task,200,0},
 };
 
 
