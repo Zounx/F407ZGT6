@@ -83,6 +83,7 @@ void sd_test_read(void);
 void sd_test_mkdir(void);
 void sd_test_mkfile(void);
 void sd_test_list(void);
+void sd_list_tick(void);
 void sd_test_delete(void);
 
 
@@ -115,5 +116,14 @@ void sd_test_pure(void);
  */
 void sd_test_stress(void);
 
+
+/* ============================================================================
+ * CSV 异步写入测试（外挂 SRAM 版）
+ *
+ * sd_test_csv()  — 入口（设置状态机），$Test,SD,CSV#
+ * sd_csv_tick()  — 由 ext_hw_test_proc 每 10ms 调用驱动
+ * ============================================================================ */
+void sd_test_csv(void);
+void sd_csv_tick(void);
 
 #endif /* FATFS_SD_H */

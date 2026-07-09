@@ -75,8 +75,8 @@ static uint8_t task_num;      /**< 任务总数 */
  * @note   在此添加需要周期性执行的任务
  */
 static task_t scheduler_task[] = {
-	{ext_hw_test_proc,10,0},
-	{ETH_WIZdemo_task,1,0},
+	{ext_hw_test_proc,100,0},
+	{ETH_WIZdemo_task,500,0},
 	{PushHeartbeat,1000,0},
 	{HandlerTask,20,0},
 	//{WIZnet_TcpClient_task,200,0},
@@ -103,7 +103,11 @@ void scheduler_run(void) {
         /* 判断任务是否到期 */
         if (now_time - scheduler_task[i].last_run >= scheduler_task[i].rate_ms) {
             scheduler_task[i].last_run = now_time;  /* 更新时间戳 */
+            uint32_t t0 = HAL_GetTick();
             scheduler_task[i].task_func();          /* 执行任务 */
+            uint32_t elapsed = HAL_GetTick() - t0;
+            bsp_usart_printf(&s_usart1,"[SCHED] task_%u: %lu ms (period=%lu ms)\r\n",
+                      i, elapsed, scheduler_task[i].rate_ms);
             now_time = HAL_GetTick();               /* 任务可能耗时，刷新时间戳 */
         }
     }

@@ -84,7 +84,7 @@ void PushCurrentValues(void);
 static void handle_set_backdoor_param(const struct PacketHeader *hdr,
                                        const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] SetBackDoorParam (fid=%d)\r\n", hdr->function_id);
+    FDS_DEBUG("[FDS] SetBackDoorParam (fid=%d)\r\n", hdr->function_id);
     if (body != NULL && hdr->body_length >= (int32_t)sizeof(BackdoorParam_T)) 
 		{
         const BackdoorParam_T *p = (const void *)body;
@@ -102,7 +102,7 @@ static void handle_set_backdoor_param(const struct PacketHeader *hdr,
 static void handle_get_backdoor_param(const struct PacketHeader *hdr,
                                        const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] GetBackDoorParam (fid=%d)\r\n", hdr->function_id);
+    FDS_DEBUG("[FDS] GetBackDoorParam (fid=%d)\r\n", hdr->function_id);
     {
         SendResponse(FID_RSP_GET_BACKDOOR_PARAM, hdr->request_id,
                      &Global_BackdoorParam, sizeof(Global_BackdoorParam));
@@ -113,7 +113,7 @@ static void handle_get_backdoor_param(const struct PacketHeader *hdr,
 static void handle_set_system_param(const struct PacketHeader *hdr,
                                      const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] SetSystemParam (fid=%d)\r\n", hdr->function_id);
+    FDS_DEBUG("[FDS] SetSystemParam (fid=%d)\r\n", hdr->function_id);
     if (body != NULL && hdr->body_length >= (int32_t)sizeof(SystemParam_T)) 
 		{
         const SystemParam_T *p = (const void *)body;
@@ -131,7 +131,7 @@ static void handle_set_system_param(const struct PacketHeader *hdr,
 static void handle_get_system_param(const struct PacketHeader *hdr,
                                      const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] GetSystemParam (fid=%d)\r\n", hdr->function_id);
+    FDS_DEBUG("[FDS] GetSystemParam (fid=%d)\r\n", hdr->function_id);
     {
         SendResponse(FID_RSP_GET_SYSTEM_PARAM, hdr->request_id,
                      &Global_SystemParam, sizeof(Global_SystemParam));
@@ -142,7 +142,7 @@ static void handle_get_system_param(const struct PacketHeader *hdr,
 static void handle_set_opmaint(const struct PacketHeader *hdr,
                                 const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] SetOpmaintInfo (fid=%d)\r\n", hdr->function_id);
+    FDS_DEBUG("[FDS] SetOpmaintInfo (fid=%d)\r\n", hdr->function_id);
     if (body != NULL && hdr->body_length >= (int32_t)sizeof(OpmaintSet_T)) 
 		{
         const OpmaintSet_T *p = (const void *)body;
@@ -150,12 +150,12 @@ static void handle_set_opmaint(const struct PacketHeader *hdr,
 				{
             Global_OpmaintInfo.suggestedReplaceBelt     = 0;
             Global_OpmaintInfo.accumulatedRunningTimeBelt = 0;
-            ETH_DEBUG("[FDS] Clear belt counters\r\n");
+            FDS_DEBUG("[FDS] Clear belt counters\r\n");
         } else if (p->dataType == 2) 
 				{
             Global_OpmaintInfo.suggestedReplaceLube     = 0;
             Global_OpmaintInfo.accumulatedRunningTimeLube = 0;
-            ETH_DEBUG("[FDS] Clear lube counters\r\n");
+            FDS_DEBUG("[FDS] Clear lube counters\r\n");
         }
     }
     {
@@ -170,7 +170,7 @@ static void handle_set_opmaint(const struct PacketHeader *hdr,
 static void handle_get_opmaint(const struct PacketHeader *hdr,
                                 const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] GetOpmaintInfo (fid=%d)\r\n", hdr->function_id);
+    FDS_DEBUG("[FDS] GetOpmaintInfo (fid=%d)\r\n", hdr->function_id);
     (void)body;
     {
         SendResponse(FID_RSP_GET_OPMAINT_INFO, hdr->request_id,
@@ -182,7 +182,7 @@ static void handle_get_opmaint(const struct PacketHeader *hdr,
 static void handle_save_program(const struct PacketHeader *hdr,
                                  const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] SaveProgram (len=%d)\r\n", hdr->body_length);
+    FDS_DEBUG("[FDS] SaveProgram (len=%d)\r\n", hdr->body_length);
     if (body != NULL && hdr->body_length > 0) 
 		{
         int32_t copy_len = hdr->body_length;
@@ -192,7 +192,7 @@ static void handle_save_program(const struct PacketHeader *hdr,
         }
         memset(Global_ProgramInfo, 0, sizeof(Global_ProgramInfo));
         memcpy(Global_ProgramInfo, body, copy_len);
-        ETH_DEBUG("[FDS] Program saved (%d bytes)\r\n", copy_len);
+        FDS_DEBUG("[FDS] Program saved (%d bytes)\r\n", copy_len);
     }
     {
         int32_t result = 1;
@@ -206,7 +206,7 @@ static void handle_save_program(const struct PacketHeader *hdr,
 static void handle_get_program_list(const struct PacketHeader *hdr,
                                      const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] GetProgramList\r\n");
+    FDS_DEBUG("[FDS] GetProgramList\r\n");
     (void)body;
     SendResponse(FID_RSP_GET_PROGRAM_LIST, hdr->request_id,
                  Global_ProgramInfoList, sizeof(Global_ProgramInfoList));
@@ -216,7 +216,7 @@ static void handle_get_program_list(const struct PacketHeader *hdr,
 static void handle_get_program(const struct PacketHeader *hdr,
                                 const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] GetProgram\r\n");
+    FDS_DEBUG("[FDS] GetProgram\r\n");
     (void)body;
     SendResponse(FID_RSP_GET_PROGRAM, hdr->request_id,
                  Global_ProgramInfo, sizeof(Global_ProgramInfo));
@@ -226,7 +226,7 @@ static void handle_get_program(const struct PacketHeader *hdr,
 static void handle_get_io_state(const struct PacketHeader *hdr,
                                  const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] GetIOState (fid=%d)\r\n", hdr->function_id);
+    FDS_DEBUG("[FDS] GetIOState (fid=%d)\r\n", hdr->function_id);
     {
         IoState_T rsp;
         memset(&rsp, 0, sizeof(rsp));
@@ -239,7 +239,7 @@ static void handle_get_io_state(const struct PacketHeader *hdr,
 static void handle_sync_time(const struct PacketHeader *hdr,
                               const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] SyncTime (fid=%d)\r\n", hdr->function_id);
+    FDS_DEBUG("[FDS] SyncTime (fid=%d)\r\n", hdr->function_id);
 
     if (body != NULL && hdr->body_length >= (int32_t)sizeof(Datetime_T)) 
 		{
@@ -260,7 +260,7 @@ static void handle_sync_time(const struct PacketHeader *hdr,
 static void handle_get_datetime(const struct PacketHeader *hdr,
                                  const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] GetDatetime\r\n");
+    FDS_DEBUG("[FDS] GetDatetime\r\n");
     {
         SendResponse(FID_RSP_GET_DATETIME, hdr->request_id,
                      &Global_DateTime, sizeof(Global_DateTime));
@@ -271,7 +271,7 @@ static void handle_get_datetime(const struct PacketHeader *hdr,
 static void handle_get_curve(const struct PacketHeader *hdr,
                               const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] GetCurvePoints (index=%ld)\r\n",
+    FDS_DEBUG("[FDS] GetCurvePoints (index=%ld)\r\n",
               body ? *(const int32_t *)body : -1);
     {
         SendResponse(FID_RSP_GET_CURVE_POINTS, hdr->request_id,
@@ -283,7 +283,7 @@ static void handle_get_curve(const struct PacketHeader *hdr,
 static void handle_servo_turn(const struct PacketHeader *hdr,
                                const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] ServoTurn\r\n");
+    FDS_DEBUG("[FDS] ServoTurn\r\n");
     if (body != NULL && hdr->body_length >= (int32_t)sizeof(ServoTurn_T)) 
 		{
         const ServoTurn_T *s = (const void *)body;
@@ -301,7 +301,7 @@ static void handle_servo_turn(const struct PacketHeader *hdr,
 static void handle_servo_stop(const struct PacketHeader *hdr,
                                const uint8_t *body)
 {
-    ETH_DEBUG("[FDS] ServoStop\r\n");
+    FDS_DEBUG("[FDS] ServoStop\r\n");
     {
         int32_t result = 1;
         Result_T rsp = {result};
@@ -316,11 +316,13 @@ static void handle_cylinder_ctrl(const struct PacketHeader *hdr,
                                   int32_t rsp_fid,
                                   const char *name)
 {
-    ETH_DEBUG("[FDS] %s\r\n", name);
+    FDS_DEBUG("[FDS] %s\r\n", name);
     if (body != NULL && hdr->body_length >= (int32_t)sizeof(int32_t)) 
 		{
-        int32_t direction = *(const int32_t *)body;
-        ETH_DEBUG(" direction=%ld\r\n", direction);
+				#if ETH_FDS_DEBUG
+						int32_t direction = *(const int32_t *)body;
+						FDS_DEBUG(" direction=%ld\r\n", direction);
+				#endif
         if (hdr->body_length >= (int32_t)sizeof(CylinderCtrl_T)) {
             const CylinderCtrl_T *c = (const void *)body;
             (void)c;
@@ -355,7 +357,7 @@ static void handle_sub_current_values(const struct PacketHeader *hdr,
     if (body != NULL && hdr->body_length >= (int32_t)sizeof(int32_t)) {
         int32_t subType = *(const int32_t *)body;
         s_subscribed = (subType == 1) ? 1 : 0;
-        ETH_DEBUG("[FDS] SubCurrentValues subType=%ld subscribed=%d\r\n",
+        FDS_DEBUG("[FDS] SubCurrentValues subType=%ld subscribed=%d\r\n",
                   subType, s_subscribed);
     }
 }
@@ -536,11 +538,11 @@ static void RecvAndDispatch(void)
         total_len = hdr.packet_length;
         if (data_len < total_len) 
 				{
-            /* 头部声明的包长大于实际可用数据：截断到实际数据，避免 advance 越界 */
-            total_len = data_len;
+            /* 头部声明的包长大于实际可用数据：TCP 分包，数据未收齐，等下次调度 */
+            break;
         }
 
-        ETH_DEBUG("[FDS] Dispatch FID=%ld (len=%ld)\r\n",
+        FDS_DEBUG("[FDS] Dispatch FID=%ld (len=%ld)\r\n",
                   hdr.function_id, total_len);
 
         ProtocolDispatch(s_rx_buf + s_rx_rd, total_len,
@@ -576,7 +578,7 @@ void HandlerInit(void)
     wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
     wiz_listen(HANDLER_SOCKET);
 
-    ETH_DEBUG("[FDS] Handler initialized, TCP Server listening on port %d\r\n",
+    FDS_DEBUG("[FDS] Handler initialized, TCP Server listening on port %d\r\n",
               HANDLER_PORT);
 
 
@@ -617,13 +619,13 @@ void HandlerTask(void)
         wiz_listen(HANDLER_SOCKET);
         s_rx_rd = 0;
         s_rx_wr = 0;
-        ETH_DEBUG("[FDS] Client disconnected, re-listening\r\n");
+        FDS_DEBUG("[FDS] Client disconnected, re-listening\r\n");
     } else if (status == SOCK_CLOSED) 
 		{
         wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
         wiz_listen(HANDLER_SOCKET);
         s_rx_rd = 0;
         s_rx_wr = 0;
-        ETH_DEBUG("[FDS] Socket reopened, listening\r\n");
+        FDS_DEBUG("[FDS] Socket reopened, listening\r\n");
     }
 }

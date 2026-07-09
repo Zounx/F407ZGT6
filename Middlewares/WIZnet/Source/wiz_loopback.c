@@ -94,7 +94,7 @@ int32_t loopback_tcps(uint8_t sn, uint8_t* buf, uint16_t port) {
 
 
 int32_t loopback_tcpc(uint8_t sn, uint8_t* buf, uint8_t* destip, uint16_t destport) {
-    int32_t ret; // return value for SOCK_ERRORs
+    int32_t ret = 0; // return value for SOCK_ERRORs
     uint16_t size = 0, sentsize = 0;
 
     // Destination (TCP Server) IP info (will be connected)
@@ -312,14 +312,14 @@ int8_t check_loopback_mode_W6x00() {
 
 //static uint16_t j=0;
 static uint16_t any_port = 	50000;
-uint8_t* msg_v4 = "IPv4 mode";
-uint8_t* msg_v6 = "IPv6 mode";
-uint8_t* msg_dual = "Dual IP mode";
+uint8_t* msg_v4 = (uint8_t*)"IPv4 mode";
+uint8_t* msg_v6 = (uint8_t*)"IPv6 mode";
+uint8_t* msg_dual = (uint8_t*)"Dual IP mode";
 
 int32_t loopback_tcps(uint8_t sn, uint8_t* buf, uint16_t port) {
     // by Lihan 20241119
     check_loopback_mode_W6x00();
-    int32_t ret;
+    int32_t ret = 0;
     uint16_t sentsize = 0;
     int8_t status, inter;
     uint8_t tmp = 0;
@@ -571,7 +571,7 @@ int32_t loopback_tcps(uint8_t sn, uint8_t* buf, uint16_t port) {
 
 int32_t loopback_tcpc(uint8_t sn, uint8_t* buf, uint8_t* destip, uint16_t destport) {
     check_loopback_mode_W6x00();
-    int32_t ret; // return value for SOCK_ERRORs
+    int32_t ret = 0; // return value for SOCK_ERRORs
     uint16_t sentsize = 0;
     uint8_t status, inter;
     uint16_t received_size;
@@ -788,7 +788,7 @@ int32_t loopback_tcpc(uint8_t sn, uint8_t* buf, uint8_t* destip, uint16_t destpo
             ret = connect(sn, destip, destport, 16);    /* Try to connect to TCP server(Socket, DestIP, DestPort) */
         }
 
-        printf("SOCK Status: %d\r\n", ret);
+        printf("SOCK Status: %ld\r\n", ret);
 
         if (ret != SOCK_OK) {
             return ret;    //	Try to TCP connect to the TCP server (destination)
@@ -835,7 +835,7 @@ int32_t loopback_udps(uint8_t sn, uint8_t* buf, uint16_t port) {
     uint8_t addr_len;
     uint16_t received_size;
     uint16_t sentsize;
-    int32_t ret;
+    int32_t ret = 0;
     uint8_t* mode_msg;
 
     if (loopback_mode == AS_IPV4) {
@@ -939,7 +939,7 @@ int32_t loopback_udps(uint8_t sn, uint8_t* buf, uint16_t port) {
 
 int32_t loopback_udpc(uint8_t sn, uint8_t* buf, uint8_t* destip, uint16_t destport) {
     check_loopback_mode_W6x00();
-    int32_t ret;
+    int32_t ret = 0;
     uint16_t size = 0, sentsize = 0;
     static uint16_t any_port = 50000;
     uint8_t addr_len;

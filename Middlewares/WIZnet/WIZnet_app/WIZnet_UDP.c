@@ -24,7 +24,8 @@ int WIZnet_UDP_init(void)
     int8_t ret;
 
     ret = wiz_socket(WIZ_UDP_SOCKET, Sn_MR_UDP, WIZ_UDP_PORT, 0);
-    if (ret != WIZ_UDP_SOCKET) {
+    if (ret != WIZ_UDP_SOCKET) 
+		{
         ETH_DEBUG("[WIZ_UDP] socket(%u) failed: %d\r\n", WIZ_UDP_SOCKET, ret);
         return -1;
     }
@@ -45,7 +46,8 @@ void WIZnet_UDP_task(void)
 
     char buf[32];
     int len = snprintf(buf, sizeof(buf), "TICK:%lu\r\n", HAL_GetTick());
-    if (len > 0) {
+    if (len > 0) 
+		{
         wiz_sendto(WIZ_UDP_SOCKET, (uint8_t *)buf, (uint16_t)len, g_wiz_remote_ip, WIZ_UDP_PORT, 4);
     }
 }

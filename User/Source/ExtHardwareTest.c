@@ -260,6 +260,7 @@ static const struct test_cmd_entry s_cmd_table[] = {
     {"SD",    "DELETE", sd_test_delete},
     {"SD",    "PURE",   sd_test_pure},
     {"SD",    "STRESS", sd_test_stress},
+    {"SD",    "CSV",    sd_test_csv},
     {"NET",   "WIZnet",   net_set_ip_handler},
     {"NET",   "WIZ_REMOTE", net_set_remote_ip_handler},
 };
@@ -383,4 +384,8 @@ void ext_hw_test_proc(void)
         if (len > 0)
             process_frame(buf, len);
     }
+
+    /* 驱动 SD 异步状态机 */
+    sd_list_tick();
+    sd_csv_tick();
 }

@@ -26,13 +26,15 @@ int WIZnet_TcpClient_init(void)
     int8_t ret;
 
     ret = wiz_socket(WIZ_TCPCLIENT_SOCKET, Sn_MR_TCP, 0, SF_IO_NONBLOCK);
-    if (ret != WIZ_TCPCLIENT_SOCKET) {
+    if (ret != WIZ_TCPCLIENT_SOCKET) 
+		{
         ETH_DEBUG("[WIZ_TCPC] socket(%u) failed: %d\r\n", WIZ_TCPCLIENT_SOCKET, ret);
         return -1;
     }
 
     ret = connect(WIZ_TCPCLIENT_SOCKET, g_wiz_remote_ip, WIZ_TCPCLIENT_REMOTE_PORT, 4);
-    if ((ret == SOCK_OK) || (ret == SOCK_BUSY)) {
+    if ((ret == SOCK_OK) || (ret == SOCK_BUSY)) 
+		{
         s_connecting = 1;
     }
 
@@ -50,17 +52,21 @@ void WIZnet_TcpClient_task(void)
 
     if (!s_init_done) return;
 
-    if (s_connected) {
+    if (s_connected) 
+		{
         /* 已连接：检查连接是否仍然正常 */
         status = getSn_SR(WIZ_TCPCLIENT_SOCKET);
-        if (status != SOCK_ESTABLISHED) {
+        if (status != SOCK_ESTABLISHED) 
+				{
             s_connected = 0;
             s_connecting = 0;
             ETH_DEBUG("[WIZ_TCPC] Disconnected, will retry\r\n");
-        } else {
+        } else 
+				{
             char buf[32];
             int len = snprintf(buf, sizeof(buf), "TICK:%lu\r\n", HAL_GetTick());
-            if (len > 0) {
+            if (len > 0) 
+						{
                 wiz_send(WIZ_TCPCLIENT_SOCKET, (uint8_t *)buf, (uint16_t)len);
             }
         }
@@ -70,11 +76,13 @@ void WIZnet_TcpClient_task(void)
     if (s_connecting) {
         /* 连接中：检查三次握手是否完成 */
         status = getSn_SR(WIZ_TCPCLIENT_SOCKET);
-        if (status == SOCK_ESTABLISHED) {
+        if (status == SOCK_ESTABLISHED) 
+				{
             s_connected = 1;
             s_connecting = 0;
             ETH_DEBUG("[WIZ_TCPC] Connected\r\n");
-        } else if ((status == SOCK_CLOSED) || (status == SOCK_TIME_WAIT)) {
+        } else if ((status == SOCK_CLOSED) || (status == SOCK_TIME_WAIT)) 
+				{
             /* 连接失败，开始重试 */
             s_connecting = 0;
         }
@@ -88,7 +96,8 @@ void WIZnet_TcpClient_task(void)
         wiz_close(WIZ_TCPCLIENT_SOCKET);
         wiz_socket(WIZ_TCPCLIENT_SOCKET, Sn_MR_TCP, 0, SF_IO_NONBLOCK);
         ret = connect(WIZ_TCPCLIENT_SOCKET, g_wiz_remote_ip, WIZ_TCPCLIENT_REMOTE_PORT, 4);
-        if ((ret == SOCK_OK) || (ret == SOCK_BUSY)) {
+        if ((ret == SOCK_OK) || (ret == SOCK_BUSY)) 
+				{
             s_connecting = 1;
         } else {
             ETH_DEBUG("[WIZ_TCPC] reconnect fail: %d\r\n", ret);

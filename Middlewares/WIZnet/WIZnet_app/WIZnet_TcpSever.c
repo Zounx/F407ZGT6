@@ -23,13 +23,15 @@ int WIZnet_TcpSever_init(void)
     int8_t ret;
 
     ret = wiz_socket(WIZ_SOCKET, Sn_MR_TCP, WIZ_TCPSERVER_PORT, 0);
-    if (ret != WIZ_SOCKET) {
+    if (ret != WIZ_SOCKET) 
+		{
         ETH_DEBUG("[WIZ_TCPS] socket(%u) failed: %d\r\n", WIZ_SOCKET, ret);
         return -1;
     }
 
     ret = wiz_listen(WIZ_SOCKET);
-    if (ret != SOCK_OK) {
+    if (ret != SOCK_OK) 
+		{
         ETH_DEBUG("[WIZ_TCPS] listen failed: %d\r\n", ret);
         return -1;
     }
@@ -45,17 +47,20 @@ void WIZnet_TcpSever_task(void)
 
     uint8_t status = getSn_SR(WIZ_SOCKET);
 
-    if (status == SOCK_ESTABLISHED) {
+    if (status == SOCK_ESTABLISHED) 
+		{
         char buf[32];
         int len = snprintf(buf, sizeof(buf), "TICK:%lu\r\n", HAL_GetTick());
-        if (len > 0) {
+        if (len > 0) 
+				{
             {
                 uint8_t nb = SOCK_IO_NONBLOCK;
                 wiz_ctlsocket(WIZ_SOCKET, CS_SET_IOMODE, &nb);
             }
             wiz_send(WIZ_SOCKET, (uint8_t *)buf, (uint16_t)len);
         }
-    } else if (status == SOCK_CLOSE_WAIT) {
+    } else if (status == SOCK_CLOSE_WAIT) 
+		{
         /* 客户端发起断开，关闭当前 socket 并重新监听 */
         wiz_close(WIZ_SOCKET);
         wiz_socket(WIZ_SOCKET, Sn_MR_TCP, WIZ_TCPSERVER_PORT, SF_IO_NONBLOCK);

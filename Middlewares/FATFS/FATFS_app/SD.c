@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include "bsp_sram.h"
 
 /* 串口引用（由 Main.c 定义）*/
 extern struct bsp_usart s_usart1;
@@ -44,6 +45,25 @@ static FIL   g_sd_file;
 
 /* 挂载状态标志 */
 static uint8_t g_sd_mounted = 0;
+
+
+/* ============================================================================
+ * SD LIST 异步状态机 — 每次 tick 只处理一个目录项，不阻塞调度器
+ * ============================================================================ */
+typedef enum {
+    LIST_IDLE = 0,
+    LIST_ROOT,        // 正在遍历根目录
+    LIST_SUB,         // 正在遍历子目录
+    LIST_DONE,        // 收尾打印统计
+} sd_list_state_t;
+
+static sd_list_state_t g_list_state = LIST_IDLE;
+static DIR        g_list_dir;       // 根目录 DIR 对象
+static DIR        g_list_subdir;    // 子目录 DIR 对象
+static FILINFO    g_list_fno;       // 当前条目信息
+static char       g_list_subpath[64]; // 子目录路径缓冲
+static uint32_t   g_list_file_cnt;  // 文件计数
+static uint32_t   g_list_dir_cnt;   // 目录计数
 
 void sd_test_mount(void)
 {
@@ -262,9 +282,6 @@ void sd_test_mkfile(void)
 void sd_test_list(void)
 {
     FRESULT res;
-    DIR     dir;
-    FILINFO fno;
-    uint32_t file_cnt = 0, dir_cnt = 0;
 
     if (!g_sd_mounted)
     {
@@ -272,74 +289,102 @@ void sd_test_list(void)
         return;
     }
 
+    if (g_list_state != LIST_IDLE)
+    {
+        bsp_usart_printf(&s_usart1, "[SD] List already in progress\r\n");
+        return;
+    }
+
     bsp_usart_send_str(&s_usart1,
         "========== SD directory tree ==========\r\n");
 
-    res = f_opendir(&dir, "0:/");
+    res = f_opendir(&g_list_dir, "0:/");
     if (res != FR_OK)
     {
         bsp_usart_printf(&s_usart1, "[SD] opendir failed! res=%d\r\n", res);
         return;
     }
 
-    for (;;)
-    {
-        res = f_readdir(&dir, &fno);
-        if (res != FR_OK || fno.fname[0] == '\0')
-            break;
+    g_list_file_cnt = 0;
+    g_list_dir_cnt  = 0;
+    g_list_state    = LIST_ROOT;
+}
 
-        if (fno.fattrib & AM_DIR)
+
+void sd_list_tick(void)
+{
+    FRESULT res;
+
+    switch (g_list_state)
+    {
+    case LIST_ROOT:
+        /* 读取根目录下一个条目 */
+        res = f_readdir(&g_list_dir, &g_list_fno);
+        if (res != FR_OK || g_list_fno.fname[0] == '\0')
+        {
+            /* 根目录遍历完毕 */
+            f_closedir(&g_list_dir);
+            g_list_state = LIST_DONE;
+            return;
+        }
+
+        if (g_list_fno.fattrib & AM_DIR)
         {
             /* 跳过 Windows 系统目录 */
-            if (strcmp(fno.fname, "System Volume Information") == 0)
-                continue;
+            if (strcmp(g_list_fno.fname, "System Volume Information") == 0)
+                return;
 
-            bsp_usart_printf(&s_usart1, "  [DIR ]  %s\r\n", fno.fname);
-            dir_cnt++;
+            bsp_usart_printf(&s_usart1, "  [DIR ]  %s\r\n", g_list_fno.fname);
+            g_list_dir_cnt++;
 
-            /* 展开子目录下一层内容 */
-            {
-                DIR     subdir;
-                FILINFO subfno;
-                char    subpath[64];
-
-                snprintf(subpath, sizeof(subpath), "0:/%s", fno.fname);
-                if (f_opendir(&subdir, subpath) == FR_OK)
-                {
-                    for (;;)
-                    {
-                        res = f_readdir(&subdir, &subfno);
-                        if (res != FR_OK || subfno.fname[0] == '\0')
-                            break;
-
-                        if (subfno.fattrib & AM_DIR)
-                        {
-                            bsp_usart_printf(&s_usart1, "    [DIR ]  %s\r\n", subfno.fname);
-                        }
-                        else
-                        {
-                            bsp_usart_printf(&s_usart1, "    [FILE]  %-20s %lu bytes\r\n",
-                                             subfno.fname, (unsigned long)subfno.fsize);
-                            file_cnt++;
-                        }
-                    }
-                    f_closedir(&subdir);
-                }
-            }
+            /* 打开子目录，下次 tick 展开 */
+            snprintf(g_list_subpath, sizeof(g_list_subpath),
+                     "0:/%s", g_list_fno.fname);
+            if (f_opendir(&g_list_subdir, g_list_subpath) == FR_OK)
+                g_list_state = LIST_SUB;
         }
         else
         {
             bsp_usart_printf(&s_usart1, "  [FILE]  %-20s %lu bytes\r\n",
-                             fno.fname, (unsigned long)fno.fsize);
-            file_cnt++;
+                             g_list_fno.fname, (unsigned long)g_list_fno.fsize);
+            g_list_file_cnt++;
         }
+        break;
+
+    case LIST_SUB:
+        /* 读取子目录下一个条目 */
+        res = f_readdir(&g_list_subdir, &g_list_fno);
+        if (res != FR_OK || g_list_fno.fname[0] == '\0')
+        {
+            /* 子目录遍历完毕，回到根目录 */
+            f_closedir(&g_list_subdir);
+            g_list_state = LIST_ROOT;
+            return;
+        }
+
+        if (g_list_fno.fattrib & AM_DIR)
+        {
+            bsp_usart_printf(&s_usart1, "    [DIR ]  %s\r\n", g_list_fno.fname);
+        }
+        else
+        {
+            bsp_usart_printf(&s_usart1, "    [FILE]  %-20s %lu bytes\r\n",
+                             g_list_fno.fname, (unsigned long)g_list_fno.fsize);
+            g_list_file_cnt++;
+        }
+        break;
+
+    case LIST_DONE:
+        bsp_usart_printf(&s_usart1, "  %lu dir(s), %lu file(s)\r\n",
+                         g_list_dir_cnt, g_list_file_cnt);
+        bsp_usart_send_str(&s_usart1,
+            "====================================\r\n");
+        g_list_state = LIST_IDLE;
+        break;
+
+    default:
+        break;
     }
-
-    f_closedir(&dir);
-
-    bsp_usart_printf(&s_usart1, "  %lu dir(s), %lu file(s)\r\n", dir_cnt, file_cnt);
-    bsp_usart_send_str(&s_usart1,
-        "====================================\r\n");
 }
 
 
@@ -583,154 +628,80 @@ FRESULT sd_list(const char *path)
 
 
 /* ============================================================================
- * CSV 写入测试 — F407 暂不使用
- * ============================================================================ */
-#if 0
-
-/* ============================================================================
- * CSV 写入测试（100,000 个数据点）— 部分异步状态机版本
+ * CSV 写入测试 — F407 外挂 SRAM 版（异步状态机，GEN+WRITE 合并执行）
  *
- * 数据管道：
- *   Phase 1:  AXISRAM buf_A/B 通过 MDMA(中断) 到 SDRAM(累计)
- *   Phase 2:  SDRAM 通过 memcpy 到 AXISRAM buf_A/B 通过 IDMA 到 SD 卡
+ * 设计概要：
+ *   CPU 生成 CSV 行 → 外挂 SRAM 暂存 (0x68000000, 512KB 工作区)
+ *   → 同一 tick 内立即 f_write 写入 SD 卡
+ *   → 重复直到 4 万点写完。
  *
- * Phase 1 与 Phase 2 共用同一组 2 块 AXISRAM 乒乓缓冲区，节省内存。
- * Phase 2 不能直接从 SDRAM 到 SD 卡，因为 SDMMC IDMA 只能访问
- * AXISRAM（D1 域），SDRAM 在 D2 域（FMC 总线），跨域 IDMA 无法读取。
+ *   F4 DMA2 可直接访问 FSMC 总线 (SRAM 在 FSMC Bank3)，无需中间缓存。
+ *   每 tick 最多处理 CSV_TICK_BYTES 字节（当前 256KB），
+ *   确保单次 f_write 耗时 < 调度器周期，不阻塞其他任务。
  *
- * 异步化改造：
- *   整个写入流程由 sd_csv_tick() 在每个 ext_hw_test_proc 的 10ms 定时
- *   tick 中执行一个状态步骤后立即返回，不阻塞 while(1) 主循环。
- *
- *   Phase 1: CPU 填满 64KB buf 后启动 MDMA 中断搬运，待下次 tick 再处理
- *            下一块。MDMA 传输完成回调仅设标志，不消耗 Tick 时间。
- *
- *   Phase 2: f_write 阻塞约 1-2ms（SD 卡内部 NAND 编程），可接受。
+ * 关键参数关系：
+ *   CSV_TICK_BYTES * (1.7MB / CSV_TICK_BYTES + 3) ≈ 总耗时
+ *   其中 1.7MB = 40000 行 CSV 近似总大小。
+ *   CSV_TICK_BYTES 越大 → 写入次数越少 → 总耗时越短
+ *   CSV_TICK_BYTES 越大 → 单 tick 耗时越长 → 需要更大调度器周期
  *
  * 串口指令: $Test,SD,CSV#
- * 代码调用: sd_test_csv()  +  sd_csv_tick() 驱动
  * ============================================================================ */
 
-#define CSV_TEST_POINTS     100000      /* 10 万个数据点 */
-#define CSV_CHUNK_SIZE      65536       /* 单块大小 (64KB)，两个乒乓缓冲区各 64KB，共 128KB */
-#define CSV_SDRAM_BUF_SIZE  (8 * 1024 * 1024)  /* SDRAM 中构建数据的最大容量 */
+#define CSV_POINTS          100000       /* 10 万个数据点 */
+#define CSV_BUF_SIZE        524288      /* SRAM 工作区 (512KB) */
+#define CSV_TICK_BYTES      262144      /* 每 tick 生成+写入的数据量 (256KB) */
 
-
-/* ============================================================================
- * CSV 异步状态机 — 完全非阻塞设计
- *
- * 设计要点：
- *   1. 状态机每 10ms (ext_hw_test_proc tick) 执行一个步骤后立即返回
- *   2. Phase 1: MDMA 中断驱动，CPU 填 buf 后立即返回，MDMA 完成后中断通知
- *   3. Phase 2: f_write 阻塞 1-2ms（SD 卡内部 NAND 编程），忙等中通过
- *      sd_dma_busy_poll_hook 让出 CPU，不阻塞 while(1) 主循环
- *   4. 缓冲区从函数局部变量提升为文件作用域 static，以便在各 tick 间保持
- * ============================================================================ */
+/* 状态机 */
 typedef enum {
     CSV_IDLE = 0,
-    CSV_P1_FILL,       /* Phase 1: 填 buf[sel] → 启 MDMA */
-    CSV_P2_PREP,       /* Phase 2: 初始化(打开文件 + 计时) */
-    CSV_P2_WRITE,      /* Phase 2: memcpy SDRAM→buf + f_write 单块 */
-    CSV_DONE,          /* 收尾: 关闭文件 + 打印统计 */
+    CSV_OPEN,           /* 刚打开文件，下一个 tick 才开始生成 + 写入 */
+    CSV_TICK,           /* 每 tick: 生成一批 + 立即写入 */
+    CSV_DONE,           /* 打印统计 */
+    CSV_CLOSE,          /* 关闭文件 (可能耗时数十ms, 单独一个 tick) */
 } csv_state_t;
 
-/* ---- 状态机持久变量 ---- */
-static csv_state_t      g_csv_state = CSV_IDLE;
-static volatile uint8_t g_csv_mdma_flag = 1;    /* MDMA 传输完成 (中断置位) */
-static uint8_t          g_csv_busy = 0;           /* 重入保护 */
-
-/* Phase 1 持久变量 */
-static uint32_t csv_p1_idx;
-static uint32_t csv_p1_sel;
-static uint32_t csv_p1_gen_cnt;
-static uint32_t csv_p1_sdram_off;
-
-/* Phase 2 持久变量 */
-static uint32_t csv_p2_offset;
-static uint32_t csv_p2_total_len;
-static uint32_t csv_p2_write_cnt;
-static uint32_t csv_p2_start_tick;
-static FIL     csv_file;
-
-#ifndef __CC_ARM
-/* GCC (CMake): .ld NOLOAD 支持，声明为 PLACE_SDRAM 数组 */
-static uint8_t g_csv_sdram_buf[CSV_SDRAM_BUF_SIZE] PLACE_SDRAM;
-#else
-/* ARMCC 5 (Keil): scatter 不能含 SDRAM（__scatterload 提前访问导致 HardFault），用指针 */
-static uint8_t * const g_csv_sdram_buf = (uint8_t *)BANK5_SDRAM_ADDR;
-#endif
-
-/* 两个 AXISRAM 乒乓缓冲区，各 CSV_CHUNK_SIZE (64KB)，交替使用，合计占用 128KB AXISRAM */
-static uint8_t g_csv_buf_A[CSV_CHUNK_SIZE] PLACE_AXI_SRAM;
-static uint8_t g_csv_buf_B[CSV_CHUNK_SIZE] PLACE_AXI_SRAM;
-
-/* MDMA 句柄（需文件作用域，中断中需要访问）*/
-static MDMA_HandleTypeDef hmdma_csv;
-static uint8_t csv_mdma_inited = 0;
+/* ---- 持久变量 ---- */
+static csv_state_t  g_csv_state = CSV_IDLE;
+static uint8_t      g_csv_busy = 0;              /* 重入保护 */
 
 
-/**
- * @brief  MDMA 传输完成回调（中断上下文，仅置标志）
- */
-static void csv_mdma_cplt(MDMA_HandleTypeDef *hmdma)
-{
-    if (hmdma->Instance == MDMA_Channel0)
-        g_csv_mdma_flag = 1;
-}
-
-
-/**
- * @brief  一次性初始化 MDMA 外设 + 中断
- * @note   仅在首次 CSV 测试时执行，此后复用
- */
-static void csv_mdma_init_one(void)
-{
-    if (csv_mdma_inited) return;
-
-    __HAL_RCC_MDMA_CLK_ENABLE();
-
-    hmdma_csv.Instance = MDMA_Channel0;
-    hmdma_csv.Init.Request = MDMA_REQUEST_SW;
-    hmdma_csv.Init.TransferTriggerMode = MDMA_BLOCK_TRANSFER;
-    hmdma_csv.Init.Priority = MDMA_PRIORITY_HIGH;
-    hmdma_csv.Init.SourceInc = MDMA_SRC_INC_BYTE;
-    hmdma_csv.Init.DestinationInc = MDMA_DEST_INC_BYTE;
-    hmdma_csv.Init.SourceDataSize = MDMA_SRC_DATASIZE_BYTE;
-    hmdma_csv.Init.DestDataSize = MDMA_DEST_DATASIZE_BYTE;
-    hmdma_csv.Init.SourceBurst = MDMA_SOURCE_BURST_SINGLE;
-    hmdma_csv.Init.DestBurst = MDMA_DEST_BURST_SINGLE;
-    hmdma_csv.Init.SourceBlockAddressOffset = 0;
-    hmdma_csv.Init.DestBlockAddressOffset = 0;
-    HAL_MDMA_Init(&hmdma_csv);
-
-    /* HAL_MDMA_Init 将 XferCpltCallback 清零，需重新注册 */
-    hmdma_csv.XferCpltCallback = csv_mdma_cplt;
-
-    HAL_NVIC_SetPriority(MDMA_IRQn, 5, 0);
-    HAL_NVIC_EnableIRQ(MDMA_IRQn);
-
-    csv_mdma_inited = 1;
-}
+static uint32_t g_csv_gen_idx;                   /* 当前已生成的点序号 (0~CSV_POINTS-1) */
+static uint32_t g_csv_write_cnt;                 /* 写入次数 */
+static uint32_t g_csv_start_tick;                /* 计时基准 */
+static FIL      g_csv_file;
 
 
 /* ---- 辅助函数：无符号整数 转 字符串，返回写入指针 ---- */
+/*
+ * 直接正向写入，不经过临时数组反转。
+ * 按数量级依次剥离高位，写出所有有效位。
+ */
 static char *csv_put_u32(char *p, uint32_t val)
 {
-    char tmp[12];
-    int len = 0;
-
     if (val == 0)
     {
         *p++ = '0';
         return p;
     }
-    while (val)
+
+    /* 找到 ≤ val 的最大 10 的幂 */
+    uint32_t pow10 = 1;
+    uint32_t tmp = val;
+    while (tmp >= 10)
     {
-        tmp[len++] = '0' + (char)(val % 10);
-        val /= 10;
+        tmp /= 10;
+        pow10 *= 10;
     }
-    for (int k = len - 1; k >= 0; k--)
-        *p++ = tmp[k];
+
+    /* 从高位到低位逐个输出 */
+    while (pow10 > 0)
+    {
+        uint32_t digit = val / pow10;
+        *p++ = '0' + (char)digit;
+        val -= digit * pow10;
+        pow10 /= 10;
+    }
     return p;
 }
 
@@ -748,13 +719,13 @@ static char *csv_put_3dig(char *p, uint32_t val)
 /*
  * 生成一行 CSV 数据
  *
- *   Index,Position,Force,Analog,Time,Speed,Voltage
- *   0,0.000,0.000,0,0,0,0.00
- *   1,0.001,0.001,1,1,1,-0.00
+ *   Index,BLANK,Position,Force,Analog,Time,Speed,Voltage,Step
+ *   0,,0.000,0.000,0,0,0,0.00,0
+ *   1,,0.001,0.001,1,1,1,-0.00,0
  *   ...
  *
  * @param  p  输出指针
- * @param  i  数据点序号 (0 ~ CSV_TEST_POINTS-1)
+ * @param  i  数据点序号 (0 ~ CSV_POINTS-1)
  * @return    写入结束位置
  */
 static char *csv_gen_line(char *p, uint32_t i)
@@ -764,6 +735,9 @@ static char *csv_gen_line(char *p, uint32_t i)
 
     /* Index */
     p = csv_put_u32(p, i);           *p++ = ',';
+
+    /* BLANK（空字段） */
+    *p++ = ',';
 
     /* Position (xxx.xxx) */
     p = csv_put_u32(p, q);           *p++ = '.';
@@ -789,19 +763,24 @@ static char *csv_gen_line(char *p, uint32_t i)
     *p++ = '0' + (char)((r / 10) % 10);
     *p++ = '0' + (char)(r % 10);
 
+    /* Step (始终为 0) */
+    *p++ = ',';
+    *p++ = '0';
+
     *p++ = '\n';
+
     return p;
 }
 
 
+
 /**
- * @brief  CSV 写入测试入口（异步启动，仅初始化状态机）
+ * @brief  CSV 写入测试入口 — 打开文件 + 写文件头
  *
- * 与旧版本不同，本函数只做初始化并设置 g_csv_state，实际处理
- * 由 sd_csv_tick() 在 ext_hw_test_proc 的每 10ms tick 中完成。
+ * 在串口命令处理器中调用。只做初始化并设置 g_csv_state，
+ * 后续数据生成和写入由 sd_csv_tick() 异步驱动。
  *
  * 串口指令: $Test,SD,CSV#
- * 代码调用: sd_test_csv()  +  sd_csv_tick() 驱动
  */
 void sd_test_csv(void)
 {
@@ -819,201 +798,214 @@ void sd_test_csv(void)
         return;
     }
 
-    /* 一次性初始化 MDMA（硬件 + 中断）*/
-    csv_mdma_init_one();
+    /* 打开文件（覆盖创建） */
+    FRESULT res = f_open(&g_csv_file, "0:/csv_test666.csv",
+                         FA_CREATE_ALWAYS | FA_WRITE);
+    if (res != FR_OK)
+    {
+        bsp_usart_printf(&s_usart1,
+            "[CSV] 打开文件失败! res=%d\r\n", res);
+        return;
+    }
 
-    /* 重置状态机变量 */
-    csv_p1_idx = 0;
-    csv_p1_sel = 0;
-    csv_p1_gen_cnt = 0;
-    csv_p1_sdram_off = 0;
-    csv_p2_offset = 0;
-    csv_p2_write_cnt = 0;
-    g_csv_mdma_flag = 1;   /* 初始：无进行中的 MDMA */
+    /* 写 CSV 文件头 + 追加首批数据，一次性扇区对齐写入。
+     * 避免 header 后出现大量空行（单纯 padding 会导致此问题）。
+     * 扇区对齐确保后续 CSV_TICK 全部走 Direct Write 路径，
+     * 消除 FATFS 部分扇区缓存写入脏数据的 bug。 */
+    {
+        char *p = (char *)EXT_SRAM_ADDR;
+        p += sprintf(p, "Version,V1.0.1\n");
+        p += sprintf(p, "ProgramID,\n");
+        p += sprintf(p, "ProgramName,\n");
+        p += sprintf(p, "DateTime,\n");
+        p += sprintf(p, "XAxisUnit,\n");
+        p += sprintf(p, "ForceUnit,\n");
+        p += sprintf(p, "Result,\n");
+        p += sprintf(p, "Tolerance Windows,\n");
+        p += sprintf(p, "ProductSN,\n");	
+        p += sprintf(p, "ComponentSN,\n");
+        p += sprintf(p, "ModelNumber,\n");
+        p += sprintf(p, "Index,BLANK,Position,Force,Analog,Time,Speed,Voltage,Step\n");
 
-    /* 先写 CSV 文件头到 SDRAM 首地址 */
-    csv_p1_sdram_off = (uint32_t)sprintf((char *)g_csv_sdram_buf,
-        "Index,Position,Force,Analog,Time,Speed,Voltage\n");
+        /* 追加首批 CSV 数据行，使总长度尽量靠近 512 字节边界
+         * （512 余量 > 480 → 到下一个边界的浪费 ≤ 31 字节）。
+         * 最多生成 3 个扇区（约 100 行），避免大量 '\n' 填充。 */
+        g_csv_gen_idx = 0;
+        while (g_csv_gen_idx < CSV_POINTS)
+        {
+            uint32_t off = (uint32_t)(p - (char *)EXT_SRAM_ADDR);
+            if (off >= 1024U)
+            {
+                uint32_t rem = off & 511U;            /* off % 512 */
+                if (rem > 480U) break;                 /* 离下一边界 ≤ 31 字节 */
+                if (off > 4096U) break;                 /* 最多生成 ~8 扇区 */
+            }
+            p = csv_gen_line(p, g_csv_gen_idx);
+            g_csv_gen_idx++;
+        }
+
+        /* 对齐到 512 字节边界 */
+        uint32_t chunk = (uint32_t)(p - (char *)EXT_SRAM_ADDR);
+        uint32_t aligned = (chunk + 511U) & ~511U;
+        for (uint32_t i = chunk; i < aligned; i++)
+            *p++ = '\n';
+
+        UINT bw;
+        res = f_write(&g_csv_file, (const void *)EXT_SRAM_ADDR,
+                      aligned, &bw);
+        if (res != FR_OK || bw != aligned)
+        {
+            bsp_usart_printf(&s_usart1,
+                "[CSV] 写文件头失败! res=%d\r\n", res);
+            f_close(&g_csv_file);
+            return;
+        }
+        f_sync(&g_csv_file);
+    }
+
+    /* 重置状态机（g_csv_gen_idx 已在上面推进） */
+    g_csv_write_cnt = 1;      /* 已写 header + 首批数据算一次 */
+    g_csv_start_tick = HAL_GetTick();
 
     bsp_usart_printf(&s_usart1,
-        "[CSV] Phase 1: %lu points simulate -> AXISRAM buf -> SDRAM...\r\n",
-        (unsigned long)CSV_TEST_POINTS);
+        "[CSV] 开始 %lu 点 CSV 写入（buffer %u bytes）...\r\n",
+        (unsigned long)CSV_POINTS, (unsigned int)CSV_BUF_SIZE);
 
-    g_csv_state = CSV_P1_FILL;
+    g_csv_state = CSV_OPEN;
 }
 
 
-/* ============================================================================
- * sd_csv_tick — CSV 异步状态机 tick 驱动
+/**
+ * @brief  CSV 异步状态机 tick 驱动
  *
- * 由 ext_hw_test_proc 每 10ms 调用一次。每个 tick 执行一个步骤后立即
- * 返回，不阻塞 while(1) 主循环。
+ * 由 ext_hw_test_proc 调度器任务按配置周期调用。
  *
- * 流水线示意：
+ * 每个 CSV_TICK 在一个调用内完成两个步骤：
+ *   1. GEN   — 生成一批 CSV 数据到外挂 SRAM (最多 CSV_TICK_BYTES)
+ *   2. WRITE — 立即 f_write 写入 SD 卡
  *
- * Phase 1 (MDMA 中断驱动):
- *   Tick N    CPU 填 buf[sel] → 启 MDMA(buf→SDRAM) → 返回
- *   Tick N+1  MDMA 完成 → CPU 填 buf[1-sel] → 启 MDMA → 返回 ...
+ * 关键：GEN + WRITE 在同一 tick 内完成，避免分多个 tick 写入
+ * 导致总耗时被调度器间隔大幅放大。
  *
- * Phase 2 (f_write IDMA 阻塞写入):
- *   Tick M    memcpy SDRAM→buf → f_write(buf→SD) → 返回
- *   Tick M+1  下一个 64KB ...
- * ============================================================================ */
+ * 状态机时序：
+ *   CSV_OPEN  (空跑一 tick，让 f_open 与 CSV_TICK 分开)
+ *   → CSV_TICK × N (GEN+WRITE 直到全部点生成完毕)
+ *   → CSV_DONE (打印统计)
+ *   → CSV_CLOSE (关闭文件，f_close 可能耗时 20-30ms)
+ *   → CSV_IDLE
+ *
+ * buffer 与周期关系（实测 @ F407 168MHz, SD 24MHz 4-bit）：
+ *   CSV_TICK_BYTES   单 tick 耗时   推荐调度周期     写入次数    总耗时
+ *   64KB             ~19ms          30ms             28 次      ~826ms
+ *   128KB            ~38ms          50ms             15 次      ~740ms
+ *   256KB  ←当前     ~77ms          90ms             7 次       ~703ms
+ *   512KB            ~155ms         200ms            4 次       ~984ms
+ *   结论：256KB@90ms 是当前最优平衡点，速度和实时性兼顾。
+ */
 void sd_csv_tick(void)
 {
     if (g_csv_state == CSV_IDLE) return;
     if (g_csv_busy) return;              /* 重入保护 */
     g_csv_busy = 1;
 
-    uint8_t *bufs[2] = { g_csv_buf_A, g_csv_buf_B };
-
     switch (g_csv_state)
     {
     /* ------------------------------------------------------------------ */
-    case CSV_P1_FILL:
+    case CSV_OPEN:
     {
-        /* 等前一次 MDMA 完成（首块无需等待）*/
-        if (csv_p1_gen_cnt > 0)
-        {
-            if (!g_csv_mdma_flag)
-                break;      /* 还没完成，下次 tick 再查 */
-        }
-
-        uint32_t sel = csv_p1_sel;
-
-        /* 填满当前 buf */
-        char *p = (char *)bufs[sel];
-        while (csv_p1_idx < CSV_TEST_POINTS &&
-               (uint32_t)(p - (char *)bufs[sel]) < CSV_CHUNK_SIZE - 60)
-        {
-            p = csv_gen_line(p, csv_p1_idx);
-            csv_p1_idx++;
-        }
-        uint32_t chunk = (uint32_t)(p - (char *)bufs[sel]);
-
-        /* 刷 D-Cache → 启动 MDMA（中断方式）搬运到 SDRAM */
-        SCB_CleanDCache_by_Addr((uint32_t *)bufs[sel],
-                                (int32_t)((chunk + 31UL) & ~31UL));
-        g_csv_mdma_flag = 0;
-        HAL_MDMA_Start_IT(&hmdma_csv,
-                          (uint32_t)bufs[sel],
-                          (uint32_t)(g_csv_sdram_buf + csv_p1_sdram_off),
-                          chunk, 1);
-        csv_p1_sdram_off += chunk;
-        csv_p1_gen_cnt++;
-        csv_p1_sel ^= 1;
-
-        if (csv_p1_idx >= CSV_TEST_POINTS)
-            g_csv_state = CSV_P2_PREP;
+        /* 此 tick 空跑，让 sd_test_csv() 中的 f_open + f_write header
+         * 与第一个 CSV_TICK 的生成+写入不在同一个 tick，
+         * 避免串口命令处理 + 文件打开耗时代码挤在一起。
+         */
+        /* 记下真正开始生成数据的时间 */
+        g_csv_start_tick = HAL_GetTick();
+        g_csv_state = CSV_TICK;
         break;
     }
 
     /* ------------------------------------------------------------------ */
-    case CSV_P2_PREP:
+    case CSV_TICK:
     {
-        /* 等最后一块 MDMA 完成 */
-        if (!g_csv_mdma_flag) break;
+        /* ---- 1. 生成一批数据到 SRAM ---- */
+        char *p = (char *)EXT_SRAM_ADDR;
+        char *end = p + CSV_TICK_BYTES;
 
-        csv_p2_total_len = csv_p1_sdram_off;
-
-        bsp_usart_printf(&s_usart1,
-            "[CSV] Phase 1 done: %lu points -> %lu blocks -> SDRAM %lu bytes\r\n",
-            (unsigned long)CSV_TEST_POINTS, (unsigned long)csv_p1_gen_cnt,
-            (unsigned long)csv_p2_total_len);
-
-        /* 刷 SDRAM D-Cache，确保 MDMA 写入的数据对外设可见 */
-        SCB_CleanDCache_by_Addr((uint32_t *)g_csv_sdram_buf,
-                                (int32_t)((csv_p2_total_len + 31) & ~31));
-        __DSB();
-
-        /* 打开文件 */
-        FRESULT res = f_open(&csv_file, "0:/csv_100k.csv",
-                             FA_CREATE_ALWAYS | FA_WRITE);
-        if (res != FR_OK)
+        while (g_csv_gen_idx < CSV_POINTS &&
+               (uint32_t)(end - p) > 60U)   /* 留一行余量 */
         {
-            bsp_usart_printf(&s_usart1,
-                "[CSV] 打开文件失败! res=%d\r\n", res);
-            g_csv_state = CSV_IDLE;
-            break;
+            p = csv_gen_line(p, g_csv_gen_idx);
+            g_csv_gen_idx++;
         }
+        uint32_t len = (uint32_t)(p - (char *)EXT_SRAM_ADDR);
 
-        bsp_usart_printf(&s_usart1,
-            "[CSV] Phase 2: SDRAM -> AXISRAM buf -> IDMA -> SD (%lu bytes/block)...\r\n",
-            (unsigned long)CSV_CHUNK_SIZE);
+        /* ---- 2. 补 '\n' 对齐到 512 字节边界，避免 FATFS
+         *        部分扇区缓存写入脏数据 ----
+         * CSV_BUF_SIZE(512KB) 足够容纳 CSVTICK_BYTES(256KB)+511 对齐 */
+        uint32_t len_aligned = (len + 511U) & ~511U;
+        for (uint32_t i = len; i < len_aligned; i++)
+            ((char *)EXT_SRAM_ADDR)[i] = '\n';
 
-        csv_p2_offset = 0;
-        csv_p2_write_cnt = 0;
-        csv_p2_start_tick = HAL_GetTick();
-        g_csv_state = CSV_P2_WRITE;
-        break;
-    }
-
-    /* ------------------------------------------------------------------ */
-    case CSV_P2_WRITE:
-    {
-        uint32_t sel = csv_p1_sel;
-        uint32_t chunk = csv_p2_total_len - csv_p2_offset;
-        if (chunk > CSV_CHUNK_SIZE)
-            chunk = CSV_CHUNK_SIZE;
-
-        /* SDRAM → AXISRAM（IDMA 必须经过 AXISRAM）*/
-        memcpy(bufs[sel], g_csv_sdram_buf + csv_p2_offset, chunk);
-
-        /* f_write 调 disk_write 走 IDMA，等待期间空等，约 1-2ms */
+        /* ---- 3. 立即写入 SD 卡 ---- */
+        if (len_aligned > 0)
         {
             UINT bw;
-            FRESULT res = f_write(&csv_file, bufs[sel], (UINT)chunk, &bw);
-            if (res != FR_OK)
+            FRESULT res = f_write(&g_csv_file,
+                        (const void *)EXT_SRAM_ADDR, len_aligned, &bw);
+            if (res != FR_OK || bw != len_aligned)
             {
                 bsp_usart_printf(&s_usart1,
-                    "[CSV] 写入失败! offset=%lu res=%d\r\n",
-                    (unsigned long)csv_p2_offset, res);
-                f_close(&csv_file);
+                    "[CSV] 写入失败! idx=%lu res=%d bw=%u/%lu\r\n",
+                    (unsigned long)g_csv_gen_idx, res,
+                    (unsigned)bw, (unsigned long)len_aligned);
+                f_close(&g_csv_file);
                 g_csv_state = CSV_IDLE;
                 break;
             }
+            g_csv_write_cnt++;
         }
 
-        csv_p2_offset += chunk;
-        csv_p1_sel ^= 1;
-        csv_p2_write_cnt++;
-
-        if (csv_p2_offset >= csv_p2_total_len)
-        {
-            csv_p2_start_tick = HAL_GetTick() - csv_p2_start_tick;
+        /* 全部点生成完毕？ */
+        if (g_csv_gen_idx >= CSV_POINTS)
             g_csv_state = CSV_DONE;
-        }
         break;
     }
 
     /* ------------------------------------------------------------------ */
     case CSV_DONE:
     {
-        uint32_t total_len = csv_p2_total_len;
-        uint32_t elapsed_ms = csv_p2_start_tick;
-        if (elapsed_ms == 0) elapsed_ms = 1;
+        /* 关闭文件前获取文件大小 */
+        uint32_t file_size = (uint32_t)f_size(&g_csv_file);
+        uint32_t elapsed = HAL_GetTick() - g_csv_start_tick;
+        if (elapsed == 0) elapsed = 1;
         uint32_t speed_kBps =
-            (uint32_t)((uint64_t)total_len * 1000UL / 1024UL / elapsed_ms);
+            (uint32_t)((uint64_t)file_size * 1000UL / 1024UL / elapsed);
 
         bsp_usart_printf(&s_usart1,
             "========== CSV 写入统计 ==========\r\n"
-            "  filename   csv_100k.csv\r\n"
-            "  data pts    %lu\r\n"
-            "  管道:\r\n"
-            "    Phase1:  AXISRAM buf→SDRAM  %lu blocks\r\n"
-            "    Phase2:  SDRAM→buf→SD       %lu 次写入\r\n"
-            "  文件大小:  %lu bytes (%lu KB)\r\n"
-            "  耗时:      %lu ms\r\n"
-            "  速度:      %lu KB/s\r\n"
+            "  文件名    csv_test.csv\r\n"
+            "  数据点    %lu\r\n"
+            "  buffer    %u bytes (每 tick %u bytes)\r\n"
+            "  文件大小   %lu bytes (%lu KB)\r\n"
+            "  写入次数   %lu 次\r\n"
+            "  耗时      %lu ms\r\n"
+            "  速度      %lu KB/s\r\n"
             "==================================\r\n",
-            (unsigned long)CSV_TEST_POINTS,
-            (unsigned long)csv_p1_gen_cnt,
-            (unsigned long)csv_p2_write_cnt,
-            (unsigned long)total_len, (unsigned long)(total_len / 1024),
-            (unsigned long)elapsed_ms,
+            (unsigned long)CSV_POINTS, (unsigned int)CSV_BUF_SIZE,
+            (unsigned int)CSV_TICK_BYTES,
+            (unsigned long)file_size, (unsigned long)(file_size / 1024),
+            (unsigned long)g_csv_write_cnt,
+            (unsigned long)elapsed,
             (unsigned long)speed_kBps);
 
-        f_close(&csv_file);
+        /* 不在此处 f_close，切到 CSV_CLOSE 单独一个 tick 关闭 */
+        g_csv_state = CSV_CLOSE;
+        break;
+    }
+
+    /* ------------------------------------------------------------------ */
+    case CSV_CLOSE:
+    {
+        f_close(&g_csv_file);
         g_csv_state = CSV_IDLE;
         break;
     }
@@ -1025,19 +1017,6 @@ void sd_csv_tick(void)
 
     g_csv_busy = 0;
 }
-
-
-/* ============================================================================
- * MDMA 中断入口
- *
- * 启动文件中的弱符号 MDMA_IRQHandler 被此强定义覆盖。
- * ============================================================================ */
-void MDMA_IRQHandler(void)
-{
-    HAL_MDMA_IRQHandler(&hmdma_csv);
-}
-
-#endif /* #if 0 — CSV 测试程序暂不启用 */
 
 
 /* ============================================================================

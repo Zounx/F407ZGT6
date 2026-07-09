@@ -11,6 +11,24 @@
 #include <stdint.h>
 #include "fds_data.h"
 
+/* USART1 对象（由 Main.c 定义） */
+extern struct bsp_usart s_usart1;
+
+/* ============================================================================
+ * 调试开关
+ *
+ * ETH_FDS_DEBUG 设为 1 时 FDS_DEBUG() 通过 USART1 打印调试信息；
+ * 设为 0 时所有 FDS_DEBUG 被编译为空，不产生任何代码。
+ * ============================================================================ */
+
+#define ETH_FDS_DEBUG  1       /* 调试开关：1=开启，0=关闭 */
+
+#if ETH_FDS_DEBUG
+    #define FDS_DEBUG(...)  bsp_usart_printf(&s_usart1, __VA_ARGS__)
+#else
+    #define FDS_DEBUG(...)  ((void)0)
+#endif
+
 /**
  * @brief  初始化 FDS 业务层
  * @note   初始化数据层、注册分发表、清空状态

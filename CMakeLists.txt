@@ -182,6 +182,8 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
         -Wall
         -Wextra
         -Wno-unused-parameter
+        -Wno-unused-function
+        -Wno-format-truncation
         -Werror=implicit-function-declaration
         -ffunction-sections
         -fdata-sections

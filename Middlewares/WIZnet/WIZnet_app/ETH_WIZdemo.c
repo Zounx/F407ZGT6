@@ -52,7 +52,7 @@ uint8_t g_wiz_remote_ip[4] = {192, 168, 1, 134};
 int ETH_WIZdemo_init(void)
 {
     int ret;
-    uint8_t buf_size[2][8] = {{2,2,2,2,2,2,2,2},{2,2,2,2,2,2,2,2}};
+    uint8_t buf_size[2][8] = {{8,4,4,0,0,0,0,0},{2,2,2,2,2,2,2,2}};
     uint8_t temp;
 
     ETH_DEBUG("[ETH] W6100 init...\r\n");
