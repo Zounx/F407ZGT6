@@ -19,6 +19,7 @@
 #include "WIZnet_TcpClient.h"
 #include "WIZnet_TcpSever.h"
 #include "WIZnet_UDP.h"
+#include "Profinet.h"
 
 #include <string.h>
 #include <stdint.h>

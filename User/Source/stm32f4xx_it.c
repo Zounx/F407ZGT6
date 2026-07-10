@@ -118,7 +118,8 @@ void USART1_IRQHandler(void)
  */
 void USART2_IRQHandler(void)
 {
-    /* TODO: bsp_usart_irq_handler(&s_usart2); */
+    extern struct bsp_usart s_usart2;
+    bsp_usart_irq_handler(&s_usart2);
 }
 
 /**

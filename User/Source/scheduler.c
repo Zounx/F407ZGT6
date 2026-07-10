@@ -3,6 +3,7 @@
 #include "bsp_usart.h"
 #include "ExtHardwareTest.h"
 #include "fds_handler.h"
+#include "Profinet.h"
 
 /* 压制 GCC 10 对空数组初始化的 -Warray-bounds 假阳性警告 */
 #if defined(__GNUC__) && !defined(__ARMCC_VERSION)
@@ -79,6 +80,7 @@ static task_t scheduler_task[] = {
 	{ETH_WIZdemo_task,500,0},
 	{PushHeartbeat,1000,0},
 	{HandlerTask,20,0},
+	//{PN_Task,10,0},
 	//{WIZnet_TcpClient_task,200,0},
 };
 
@@ -103,11 +105,11 @@ void scheduler_run(void) {
         /* 判断任务是否到期 */
         if (now_time - scheduler_task[i].last_run >= scheduler_task[i].rate_ms) {
             scheduler_task[i].last_run = now_time;  /* 更新时间戳 */
-            uint32_t t0 = HAL_GetTick();
+//            uint32_t t0 = HAL_GetTick();
             scheduler_task[i].task_func();          /* 执行任务 */
-            uint32_t elapsed = HAL_GetTick() - t0;
-            bsp_usart_printf(&s_usart1,"[SCHED] task_%u: %lu ms (period=%lu ms)\r\n",
-                      i, elapsed, scheduler_task[i].rate_ms);
+//            uint32_t elapsed = HAL_GetTick() - t0;
+//            bsp_usart_printf(&s_usart1,"[SCHED] task_%u: %lu ms (period=%lu ms)\r\n",
+//                      i, elapsed, scheduler_task[i].rate_ms);
             now_time = HAL_GetTick();               /* 任务可能耗时，刷新时间戳 */
         }
     }
@@ -158,12 +160,31 @@ static struct bsp_tim s_tim14;  /**< TIM14 通用定时器（APB1） */
 /* 外部 USART1 对象声明 */
 extern struct bsp_usart s_usart1;
 
+/* 外部 USART2 对象声明 (NP40 Profinet) */
+extern struct bsp_usart s_usart2;
+
+/* PN_Task 10ms 节拍计数 (在 TIM6 1ms ISR 内计数 1~10) */
+static uint8_t s_pn_task_tick = 0;
+
 /* ---- 回调函数 ---- */
 
-/** @brief TIM6 回调：1ms 心跳，轮询 USART DMA 和测试命令 */
+/** @brief TIM6 回调：1ms 心跳，轮询 USART DMA + 每 10ms 运行 PN_Task
+ *
+ *  类似 test_tx 的 App1ms 设计：
+ *  1. bsp_usart_proc — 检查 DMA 发送完成 + ORE 恢复
+ *  2. 每 10 次 (10ms) 运行一次 PN_Task
+ *
+ *  将 PN_Task 放在 TIM6 ISR 中执行，与 test_tx 保持一致的时序：
+ *  USART 状态刷新 → 任务处理，都在同一个 ISR 内完成，避免竞争
+ */
 static void tim6_cb(void)
 {
     bsp_usart_proc(&s_usart1);
+    bsp_usart_proc(&s_usart2);
+    if (++s_pn_task_tick >= 10) {
+        s_pn_task_tick = 0;
+        PN_Task();
+    }
 }
 
 /** @brief TIM2 回调：250us 子周期（预留） */

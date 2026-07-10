@@ -550,11 +550,42 @@ void bsp_usart_send_dma(struct bsp_usart *me, uint8_t *data, uint16_t len)
     me->tx_type = 1;
     me->dmaing  = 1;
 
-    /* 启动 DMA 传输 */
+    /* 启动 DMA 传输
+     *
+     * F4 DMA 第二次启动缺陷：DMA 传输完成后 M0AR 自动递增到缓冲区末尾，
+     * 但 NDTR=0 / EN=0。必须等待 EN 清零后重写 M0AR+NDTR 才能再次使能。
+     * 参考 test_tx 的 InitUsart2_DMA 做法。
+     */
     if (me->dma_tx)
     {
+        /* 1. 停止 DMA */
         CLEAR_BIT(me->dma_tx->CR, DMA_SxCR_EN);
+
+        /* 2. 等待 EN 确实清零 */
+        timeout = 100000;
+        while ((me->dma_tx->CR & DMA_SxCR_EN) && --timeout);
+
+        /* 3. 清除 DMA 所有状态标志（TCIF/HTIF/TEIF/DMEIF/FEIF）
+         *
+         * 关键！F4 DMA 第二次启动时，若 TCIF 还挂着，硬件可能认为
+         * 传输已完成导致刚使能就停 EN，NDTR 不递减。
+         * 参考 test_tx SCIB_BufTx 在 Enable 前调 DMA_ClearFlag。
+         */
+        {
+            uint32_t stream_idx = ((uint32_t)me->dma_tx - (uint32_t)DMA1_Stream0) /
+                                  ((uint32_t)DMA1_Stream1 - (uint32_t)DMA1_Stream0);
+            if (stream_idx < 4)
+                DMA1->LIFCR = 0x3FUL << (stream_idx * 6);
+            else
+                DMA1->HIFCR = 0x3FUL << ((stream_idx - 4) * 6);
+        }
+
+        /* 4. 重写 NDTR + M0AR + PAR */
         WRITE_REG(me->dma_tx->NDTR, len);
+        WRITE_REG(me->dma_tx->M0AR, (uint32_t)me->tx_buf);
+        WRITE_REG(me->dma_tx->PAR, (uint32_t)&me->instance->DR);
+
+        /* 5. 使能 DMA */
         SET_BIT(me->dma_tx->CR, DMA_SxCR_EN);
     }
 }

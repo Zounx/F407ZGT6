@@ -148,6 +148,7 @@ set(FDS_SOURCES
     APP/Communication/Source/fds_param.c
     APP/Communication/Source/fds_protocol.c
     APP/Communication/Source/fds_handler.c
+    APP/Communication/Source/Profinet.c
 )
 
 # ============================================================================

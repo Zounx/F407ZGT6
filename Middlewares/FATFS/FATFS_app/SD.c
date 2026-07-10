@@ -868,7 +868,7 @@ void sd_test_csv(void)
     g_csv_start_tick = HAL_GetTick();
 
     bsp_usart_printf(&s_usart1,
-        "[CSV] 开始 %lu 点 CSV 写入（buffer %u bytes）...\r\n",
+        "[CSV] start %lu points CSV write (buffer %u bytes)...\r\n",
         (unsigned long)CSV_POINTS, (unsigned int)CSV_BUF_SIZE);
 
     g_csv_state = CSV_OPEN;
@@ -981,15 +981,15 @@ void sd_csv_tick(void)
             (uint32_t)((uint64_t)file_size * 1000UL / 1024UL / elapsed);
 
         bsp_usart_printf(&s_usart1,
-            "========== CSV 写入统计 ==========\r\n"
-            "  文件名    csv_test.csv\r\n"
-            "  数据点    %lu\r\n"
-            "  buffer    %u bytes (每 tick %u bytes)\r\n"
-            "  文件大小   %lu bytes (%lu KB)\r\n"
-            "  写入次数   %lu 次\r\n"
-            "  耗时      %lu ms\r\n"
-            "  速度      %lu KB/s\r\n"
-            "==================================\r\n",
+            "========== CSV write summary ==========\r\n"
+            "  filename   csv_test.csv\r\n"
+            "  points     %lu\r\n"
+            "  buffer     %u bytes (per tick %u bytes)\r\n"
+            "  file size  %lu bytes (%lu KB)\r\n"
+            "  writes     %lu\r\n"
+            "  elapsed    %lu ms\r\n"
+            "  speed      %lu KB/s\r\n"
+            "=======================================\r\n",
             (unsigned long)CSV_POINTS, (unsigned int)CSV_BUF_SIZE,
             (unsigned int)CSV_TICK_BYTES,
             (unsigned long)file_size, (unsigned long)(file_size / 1024),

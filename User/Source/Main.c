@@ -11,6 +11,9 @@
 /** USART1 对象定义（非 static，供 stm32f4xx_it.c 使用） */
 struct bsp_usart s_usart1;
 
+/** USART2 对象定义 — NP40 Profinet (PA2 TX, PA3 RX, DMA1 Stream6/5) */
+struct bsp_usart s_usart2;
+
 /**
   * @brief  主函数
   */
@@ -34,6 +37,12 @@ int main(void)
 
   bsp_usart_send_str(&s_usart1, "USART1 初始化完成\r\n");
 
+  /* 初始化 USART2：PA2(TX) / PA3(RX) @115200，DMA1_Stream6(TX) / DMA1_Stream5(RX) — NP40 Profinet */
+  bsp_usart_init(&s_usart2, USART2, GPIOA, GPIO_PIN_2, GPIOA, GPIO_PIN_3,
+                 115200, DMA1_Stream6, DMA1_Stream5,
+                 8, 1024, NULL);
+  bsp_usart_send_str(&s_usart1, "USART2 (NP40 Profinet) 初始化完成\r\n");
+
   /* 初始化外部 SRAM（FSMC Bank3，0x68000000） */
   bsp_sram_init();
   /* 初始化全部硬件定时器（TIM1~14），TIM6 为 1ms 心跳 */
@@ -55,6 +64,9 @@ int main(void)
     ret = WIZnet_UDP_init();
     if (ret != 0)
         bsp_usart_printf(&s_usart1, "WIZ_UDP init failed!\r\n");
+
+    /* NP40 Profinet 初始化 (USART2 已在前面 init, 这里只复位+探活) */
+    PN_Init();
 
     /* FDS 业务层初始化 */
     HandlerInit();
