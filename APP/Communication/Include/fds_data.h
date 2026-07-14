@@ -50,9 +50,9 @@ enum SystemModel {
 
 // 程序列表信息
 typedef struct ProgramListInfo {
-    int32_t  programId;                         // 程序 ID
+    uint8_t  programId[4];                      // 程序 ID（小端序）
     uint8_t  programName[PROGRAM_NAME_LEN];     // 程序名称
-} ProgramListInfo_T;
+} ProgramListInfo_T; 
 
 // 程序列表
 typedef struct ProgramListInfos {

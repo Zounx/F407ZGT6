@@ -34,6 +34,8 @@ uint8_t  Global_ProgramInfoList[2688];                    // 程序列表存储�
  * ============================================================================ */
 
 int32_t  Global_StepResultCount;                          // 步骤结果数量
+int32_t  Global_CurrentProgramId = 0;                     // 当前程序 ID
+int32_t  Global_ProgramCount = 0;                         // 程序总数
 int32_t  Global_SystemState;                              // 系统状态
 int32_t  Global_SystemModel;                              // 系统模式
 int32_t  Global_LogicLock;                                // 逻辑锁

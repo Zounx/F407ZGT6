@@ -87,6 +87,15 @@
 
 
 /* ============================================================================
+ * DMA 诊断（用于 Profinet 异常分析）
+ * ============================================================================ */
+uint32_t g_dma_cr_post  = 0;  /* SET_BIT(EN) 后立即读回的 CR */
+uint32_t g_dma_ndtr_post = 0; /* SET_BIT(EN) 后立即读回的 NDTR */
+uint32_t g_dma_m0ar_post = 0; /* SET_BIT(EN) 后立即读回的 M0AR */
+uint32_t g_dma_cr_poll   = 0; /* 轮询 100 次后最终的 CR */
+
+
+/* ============================================================================
  * 内部辅助函数
  * ============================================================================ */
 
@@ -327,43 +336,45 @@ int bsp_usart_init(struct bsp_usart *me, USART_TypeDef *instance,
         else
             __HAL_RCC_DMA2_CLK_ENABLE();
 
-        /* 4b. 停止 DMA 流 */
-        CLEAR_BIT(me->dma_tx->CR, DMA_SxCR_EN);
+        /* 4b. 重置 DMA 流至默认值（如 SPL DMA_DeInit） */
+        me->dma_tx->CR   &= ~DMA_SxCR_EN;
+        me->dma_tx->CR    = 0;
+        me->dma_tx->NDTR  = 0;
+        me->dma_tx->PAR   = 0;
+        me->dma_tx->M0AR  = 0;
+        me->dma_tx->M1AR  = 0;
+        me->dma_tx->FCR   = 0;
 
-        /* 4c. 清除 DMA 中断标志 */
-        {
-            uint32_t stream_idx = ((uint32_t)me->dma_tx - (uint32_t)DMA1_Stream0) /
-                                  ((uint32_t)DMA1_Stream1 - (uint32_t)DMA1_Stream0);
-            if (stream_idx < 4)
-                DMA1->LIFCR = 0x3FUL << (stream_idx * 6);
-            else
-                DMA1->HIFCR = 0x3FUL << ((stream_idx - 4) * 6);
-        }
-
-        /* 4d. 配置 TX DMA CR
+        /* 4c. 配置 TX DMA CR
+         *   CHSEL  = 4   CH4（所有 USART 固定）
+         *   PL     = 01  中等优先级 (匹配 test_tx)
          *   MINC   = 1   存储器地址递增
          *   DIR    = 01  存储器 → 外设
-         *   CHSEL  = 4   CH4（所有 USART 固定）
          *   PSIZE  = 00  8 位
          *   MSIZE  = 00  8 位
-         *   PL     = 00  最低优先级
          */
-        me->dma_tx->CR = DMA_SxCR_MINC | DMA_SxCR_DIR_0 | BSP_USART_DMA_CHSEL;
+        me->dma_tx->CR  = DMA_SxCR_MINC | DMA_SxCR_DIR_0
+                        | DMA_SxCR_PL_0 | BSP_USART_DMA_CHSEL;
 
-        /* 4e. 外设地址 = USART 数据寄存器 */
+        /* 4d. 外设地址 = USART 数据寄存器 */
         me->dma_tx->PAR = (uint32_t)&me->instance->DR;
 
-        /* 4f. 存储器地址 = 发送缓冲区 */
+        /* 4e. 存储器地址 = 发送缓冲区 */
         me->dma_tx->M0AR = (uint32_t)me->tx_buf;
 
-        /* 4g. FCR = 直接模式 */
-        me->dma_tx->FCR = 0;
+        /* 4f. FCR = 直接模式 + FTH=满阈值 (匹配 test_tx) */
+        me->dma_tx->FCR = DMA_SxFCR_FTH_1 | DMA_SxFCR_FTH_0;
+
+        /* 4g. TX 流暂不使能（send_dma 时再使能） */
     }
 
     /* ---------- 5. 使能 USART DMA 发送 ---------- */
     if (me->dma_tx)
     {
         SET_BIT(me->instance->CR3, USART_CR3_DMAT);
+
+        /* 5b. DMA 状态机等待首次 send_dma 时自然启动
+         *     （不在这里使能 DMA，避免向 NP40 发送垃圾字节） */
     }
 
     /* ---------- 6. 配置 RX DMA ---------- */
@@ -375,41 +386,38 @@ int bsp_usart_init(struct bsp_usart *me, USART_TypeDef *instance,
         else
             __HAL_RCC_DMA2_CLK_ENABLE();
 
-        /* 6b. 停止 DMA 流 */
-        CLEAR_BIT(me->dma_rx->CR, DMA_SxCR_EN);
+        /* 6b. 重置 DMA 流至默认值 */
+        me->dma_rx->CR   &= ~DMA_SxCR_EN;
+        me->dma_rx->CR    = 0;
+        me->dma_rx->NDTR  = 0;
+        me->dma_rx->PAR   = 0;
+        me->dma_rx->M0AR  = 0;
+        me->dma_rx->M1AR  = 0;
+        me->dma_rx->FCR   = 0x00000021;
 
-        /* 6c. 清除 DMA 中断标志 */
-        {
-            uint32_t stream_idx = ((uint32_t)me->dma_rx - (uint32_t)DMA1_Stream0) /
-                                  ((uint32_t)DMA1_Stream1 - (uint32_t)DMA1_Stream0);
-            if (stream_idx < 4)
-                DMA1->LIFCR = 0x3FUL << (stream_idx * 6);
-            else
-                DMA1->HIFCR = 0x3FUL << ((stream_idx - 4) * 6);
-        }
-
-        /* 6d. 配置 RX DMA CR
+        /* 6c. 配置 RX DMA CR
+         *   CHSEL  = 4   CH4
+         *   PL     = 01  中等优先级 (匹配 test_tx)
          *   CIRC   = 1   循环模式
          *   MINC   = 1   存储器地址递增
          *   DIR    = 00  外设 → 存储器
-         *   CHSEL  = 4   CH4（所有 USART 固定）
          *   PSIZE  = 00  8 位
          *   MSIZE  = 00  8 位
-         *   PL     = 00  最低优先级
          */
-        me->dma_rx->CR = DMA_SxCR_CIRC | DMA_SxCR_MINC | BSP_USART_DMA_CHSEL;
+        me->dma_rx->CR  = DMA_SxCR_CIRC | DMA_SxCR_MINC
+                        | DMA_SxCR_PL_0 | BSP_USART_DMA_CHSEL;
 
-        /* 6e. 外设地址 = USART 数据寄存器 */
+        /* 6d. 外设地址 = USART 数据寄存器 */
         me->dma_rx->PAR = (uint32_t)&me->instance->DR;
 
-        /* 6f. 存储器地址 = 环形接收缓冲区 */
+        /* 6e. 存储器地址 = 环形接收缓冲区 */
         me->dma_rx->M0AR = (uint32_t)me->rx_buf;
 
-        /* 6g. NDTR = 缓冲区大小 */
+        /* 6f. NDTR = 缓冲区大小 */
         me->dma_rx->NDTR = BSP_USART_FRAME_SIZE;
 
-        /* 6h. FCR = 直接模式 */
-        me->dma_rx->FCR = 0;
+        /* 6g. FCR = 直接模式 + FTH=满阈值 (匹配 test_tx) */
+        me->dma_rx->FCR = DMA_SxFCR_FTH_1 | DMA_SxFCR_FTH_0;
     }
 
     /* ---------- 7. 使能 USART DMA 接收 ---------- */
@@ -552,41 +560,89 @@ void bsp_usart_send_dma(struct bsp_usart *me, uint8_t *data, uint16_t len)
 
     /* 启动 DMA 传输
      *
-     * F4 DMA 第二次启动缺陷：DMA 传输完成后 M0AR 自动递增到缓冲区末尾，
-     * 但 NDTR=0 / EN=0。必须等待 EN 清零后重写 M0AR+NDTR 才能再次使能。
-     * 参考 test_tx 的 InitUsart2_DMA 做法。
+     * 严格对齐 test_tx SCIB_BufTx 做法：
+     *   DISABLE → NDTR → 只清 TCIF → ENABLE
+     *
+     * 关键点：
+     *   - 不写 M0AR（test_tx 的 BufTx 也不写，由 init 固定 M0AR 指向 tx_buf）
+     *   - PAR 不用重写（init 时已固定为 USART DR）
+     *   - 只清 TCIF 而非全部标志（清除 HTIF 可能干扰 CIRC 模式下的 RX 流）
+     *   - __DSB() 确保 TCIF 清除在 EN 之前提交到 APB 总线
      */
     if (me->dma_tx)
     {
-        /* 1. 停止 DMA */
-        CLEAR_BIT(me->dma_tx->CR, DMA_SxCR_EN);
+        uint32_t stream_idx = ((uint32_t)me->dma_tx - (uint32_t)DMA1_Stream0) /
+                              ((uint32_t)DMA1_Stream1 - (uint32_t)DMA1_Stream0);
 
-        /* 2. 等待 EN 确实清零 */
-        timeout = 100000;
-        while ((me->dma_tx->CR & DMA_SxCR_EN) && --timeout);
-
-        /* 3. 清除 DMA 所有状态标志（TCIF/HTIF/TEIF/DMEIF/FEIF）
-         *
-         * 关键！F4 DMA 第二次启动时，若 TCIF 还挂着，硬件可能认为
-         * 传输已完成导致刚使能就停 EN，NDTR 不递减。
-         * 参考 test_tx SCIB_BufTx 在 Enable 前调 DMA_ClearFlag。
-         */
+        /* 流复位：停 DMA → NDTR=0 → 清所有标志 */
+        me->dma_tx->CR = 0;
         {
-            uint32_t stream_idx = ((uint32_t)me->dma_tx - (uint32_t)DMA1_Stream0) /
-                                  ((uint32_t)DMA1_Stream1 - (uint32_t)DMA1_Stream0);
+            volatile uint32_t _timeout = 10000;
+            while ((me->dma_tx->CR & DMA_SxCR_EN) && --_timeout);
+        }
+        me->dma_tx->NDTR = 0;
+        {
             if (stream_idx < 4)
                 DMA1->LIFCR = 0x3FUL << (stream_idx * 6);
             else
                 DMA1->HIFCR = 0x3FUL << ((stream_idx - 4) * 6);
         }
 
-        /* 4. 重写 NDTR + M0AR + PAR */
-        WRITE_REG(me->dma_tx->NDTR, len);
-        WRITE_REG(me->dma_tx->M0AR, (uint32_t)me->tx_buf);
-        WRITE_REG(me->dma_tx->PAR, (uint32_t)&me->instance->DR);
-
-        /* 5. 使能 DMA */
+        /* 尝试 DMA 方式：配置 → 使能 */
+        me->dma_tx->CR   = DMA_SxCR_MINC | DMA_SxCR_DIR_0
+                          | DMA_SxCR_PL_0 | BSP_USART_DMA_CHSEL;
+        me->dma_tx->NDTR = len;
+        __DSB();
         SET_BIT(me->dma_tx->CR, DMA_SxCR_EN);
+
+        /* 检查 DMA 是否成功使能；若失败则轮询回退 */
+        if (!(me->dma_tx->CR & DMA_SxCR_EN))
+        {
+            /* 诊断保存 */
+            g_dma_cr_post  = me->dma_tx->CR;
+            g_dma_ndtr_post = me->dma_tx->NDTR;
+            g_dma_m0ar_post = me->dma_tx->M0AR;
+            {
+                volatile uint32_t __tmp;
+                g_dma_cr_poll = g_dma_cr_post;
+                for (volatile int __i = 0; __i < 100; __i++) {
+                    __tmp = me->dma_tx->CR;
+                    if (!(__tmp & DMA_SxCR_EN)) {
+                        g_dma_cr_poll = __tmp;
+                        break;
+                    }
+                    g_dma_cr_poll = __tmp;
+                }
+            }
+
+            /* 回退到轮询发送 */
+            me->dmaing = 0;
+            me->tx_type = 0;
+            for (uint16_t _i = 0; _i < len; _i++) {
+                while (!(me->instance->SR & USART_SR_TXE));
+                me->instance->DR = me->tx_buf[_i];
+            }
+            while (!(me->instance->SR & USART_SR_TC));
+            me->instance->SR &= ~USART_SR_TC;
+            return;
+        }
+
+        /* DMA 使能成功：保存诊断 */
+        {
+            g_dma_cr_post  = me->dma_tx->CR;
+            g_dma_ndtr_post = me->dma_tx->NDTR;
+            g_dma_m0ar_post = me->dma_tx->M0AR;
+            volatile uint32_t __tmp;
+            g_dma_cr_poll = g_dma_cr_post;
+            for (volatile int __i = 0; __i < 100; __i++) {
+                __tmp = me->dma_tx->CR;
+                if (!(__tmp & DMA_SxCR_EN)) {
+                    g_dma_cr_poll = __tmp;
+                    break;
+                }
+                g_dma_cr_poll = __tmp;
+            }
+        }
     }
 }
 
@@ -610,27 +666,50 @@ void bsp_usart_clr_tx(struct bsp_usart *me)
 
 void bsp_usart_tx_inquire(struct bsp_usart *me)
 {
+    uint32_t stream_idx, tcif_bit;
+
     if (!me || !me->initialized)
         return;
     if (me->tx_type != 1)
         return;
 
+    if (!me->dma_tx)
+        return;
+
     /*
-     * 检查 DMA 发送完成条件：
-     *   NDTR==0           → DMA 已搬完所有字节
-     *   SR_TC             → USART 已发出最后一个字节
-     *
-     * F4 无 ICR 寄存器，TC 不清除（硬件自动维护，下次发送完成仍会被置位）。
+     * 检查 TCIF（传输完成标志）+ USART_TC：
+     *   参照 test_tx TxInquire，用 TCIF 检查而非 NDTR==0。
+     *   TCIF 是明确的"传输完成"信号，NDTR==0 可能因轮询时序漏掉。
      */
-    if (me->dma_tx && (READ_REG(me->dma_tx->NDTR) == 0) &&
-        (READ_REG(me->instance->SR) & USART_SR_TC))
+    stream_idx = ((uint32_t)me->dma_tx - (uint32_t)DMA1_Stream0) /
+                  ((uint32_t)DMA1_Stream1 - (uint32_t)DMA1_Stream0);
+
+    /* 读取该流的 TCIF 标志（每个流 6 位，TCIF 在 bit 4）*/
+    if (stream_idx < 4)
+        tcif_bit = (DMA1->LISR >> (stream_idx * 6)) & 0x10;
+    else
+        tcif_bit = (DMA1->HISR >> ((stream_idx - 4) * 6)) & 0x10;
+
+    if (tcif_bit && (READ_REG(me->instance->SR) & USART_SR_TC))
     {
-        /* 复位状态，停 DMA */
+        /* 停 DMA */
+        CLEAR_BIT(me->dma_tx->CR, DMA_SxCR_EN);
+        {
+            volatile uint32_t _timeout = 10000;
+            while ((me->dma_tx->CR & DMA_SxCR_EN) && --_timeout);
+        }
+
+        /* 清 TCIF */
+        if (stream_idx < 4)
+            DMA1->LIFCR = 0x10UL << (stream_idx * 6);
+        else
+            DMA1->HIFCR = 0x10UL << ((stream_idx - 4) * 6);
+
+        /* 复位状态 */
         me->tx_cnt  = 0;
         me->tx_sum  = 0;
         me->tx_type = 0;
         me->dmaing  = 0;
-        CLEAR_BIT(me->dma_tx->CR, DMA_SxCR_EN);
     }
 }
 

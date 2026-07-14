@@ -324,12 +324,12 @@ body 为 128 条记录的数组（每个步骤一条，共 896 个 int32_t = 358
 ### 定义
 
 ```c
-typedef struct ProgramListInfo {
+typedef struct __attribute__((packed)) ProgramListInfo {
     int32_t  programId;                         // 程序 ID
     uint8_t  programName[PROGRAM_NAME_LEN];     // 程序名称（17 字节）
 } ProgramListInfo_T;  // 21 字节
 
-typedef struct ProgramListInfos {
+typedef struct __attribute__((packed)) ProgramListInfos {
     int32_t  currentProgramId;                  // 当前程序 ID
     int32_t  programCount;                      // 程序总数
     ProgramListInfo_T list[PROGRAM_LIST_MAX];   // 程序列表（128 条）
@@ -337,14 +337,14 @@ typedef struct ProgramListInfos {
 ```
 
 **注意**：下位机以字节数组 `Global_ProgramInfoList[2688]` 承载列表数据（128 条 × 21 字节），
-结构体定义供参考，实际 wire format 与结构体可能存在对齐差异。
+响应时手动拼接 `currentProgramId(4B) + programCount(4B) + list(2688B)`，共 2696 字节。
 
 ### 请求/响应
 
 | 方向 | FID | 说明 |
 |------|-----|------|
 | PC→设备 | 130 | 请求程序列表（body 为空） |
-| 设备→PC | 131 | 返回程序列表（body = 2688 字节数组） |
+| 设备→PC | 131 | 返回程序列表（body = 2696 字节：currentProgramId + programCount + list[128×21]） |
 
 **请求示例**：
 ```
@@ -355,15 +355,15 @@ typedef struct ProgramListInfos {
 
 **响应示例**：
 ```
-A0 0A 00 00 83 00 00 00 01 00 00 00 80 0A 00 00
+98 0A 00 00 83 00 00 00 01 00 00 00 88 0A 00 00
 01 00 00 00  02 00 00 00  ← currentProgramId=1, programCount=2
-01 00 00 00  54 31 31 30 2D 50 72 6F 00 00 00 00 00 00 00 00 00 00  ← ID=1, Name="T110-Pro"
-02 00 00 00  54 65 73 74 50 72 6F 67 00 00 00 00 00 00 00 00 00 00  ← ID=2, Name="TestProg"
+01 00 00 00  54 31 31 30 2D 50 72 6F 00 00 00 00 00 00 00 00 00  ← ID=1, Name="T110-Pro" (21B)
+02 00 00 00  54 65 73 74 50 72 6F 67 00 00 00 00 00 00 00 00 00  ← ID=2, Name="TestProg" (21B)
 ...（其余 126 条全 0）
 ```
 - `83` = 131 = RspGetProgramListInfos 程序列表获取响应
-- `80 0A 00 00` = 2688 = bodyLength
-- `A0 0A` = 16+2688 = 2704 = packetLength
+- `88 0A 00 00` = 2696 = bodyLength
+- `98 0A` = 16+2696 = 2712 = packetLength
 
 ---
 
@@ -753,7 +753,7 @@ typedef struct CurrentValues {
 | 报警推送 | — | 127(推) | — | SysError_T(8B) |
 | 步骤结果推送 | — | 135(推) | — | ProgramStepResultInfos_T[128](3584B) |
 | 保存程序 | 128 | 129 | programInfo[5000] | result(4B) |
-| 获取程序列表 | 130 | 131 | — | ProgramListInfo_T[128](2688B) |
+| 获取程序列表 | 130 | 131 | — | currentProgramId(4B)+programCount(4B)+list[128×21B](2696B) |
 | 获取程序信息 | 132 | 133 | — | uint8_t[5000] |
 | IO 状态获取 | 136 | 137 | — | IoState_T(28B) |
 | 同步时间 | 138 | 139 | Datetime_T(24B) | result(4B) + Datetime_T(24B) |

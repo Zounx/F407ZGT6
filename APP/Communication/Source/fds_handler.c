@@ -6,6 +6,7 @@
  */
 #include "fds_handler.h"
 #include "fds_param.h"
+#include "fds_data.h"
 #include "fds_protocol.h"
 #include "ETH_WIZdemo.h"
 #include "wizchip_conf.h"
@@ -209,7 +210,7 @@ static void handle_get_program_list(const struct PacketHeader *hdr,
     FDS_DEBUG("[FDS] GetProgramList\r\n");
     (void)body;
     SendResponse(FID_RSP_GET_PROGRAM_LIST, hdr->request_id,
-                 Global_ProgramInfoList, sizeof(Global_ProgramInfoList));
+                 &Global_ProgramList, sizeof(Global_ProgramList));
 }
 
 /** RspGetProgram-程序信息获取 */

@@ -23,6 +23,12 @@
 extern struct bsp_usart  s_usart1;    /* 调试串口 */
 extern struct bsp_usart  s_usart2;    /* NP40 Profinet (USART2) */
 
+/* DMA 诊断变量 (bsp_usart.c 定义) */
+extern uint32_t g_dma_cr_post;
+extern uint32_t g_dma_ndtr_post;
+extern uint32_t g_dma_m0ar_post;
+extern uint32_t g_dma_cr_poll;
+
 /* ============================================================================
  * 内部变量
  * ============================================================================ */
@@ -330,8 +336,38 @@ void PN_Task(void)
         if (now - s_last_dma_warn > 1000)
         {
             s_last_dma_warn = now;
-            bsp_usart_printf(&s_usart1, "[PN WARN] DMA anomaly: dmaing=1 EN=0 NDTR=%lu, auto-recover\r\n",
-                (unsigned long)s_usart2.dma_tx->NDTR);
+            /* 在清标志前读取 ISR，确认是哪个错误标志 */
+            uint32_t hisr = DMA1->HISR;
+            uint32_t lisr = DMA1->LISR;
+            uint32_t st_flags;
+            uint32_t stream_idx_diag = ((uint32_t)s_usart2.dma_tx - (uint32_t)DMA1_Stream0) /
+                                        ((uint32_t)DMA1_Stream1 - (uint32_t)DMA1_Stream0);
+            if (stream_idx_diag < 4)
+                st_flags = (lisr >> (stream_idx_diag * 6)) & 0x1F;
+            else
+                st_flags = (hisr >> ((stream_idx_diag - 4) * 6)) & 0x1F;
+            /* st_flags bits: 4=TCIF, 3=HTIF, 2=TEIF, 1=DMEIF, 0=FEIF */
+            bsp_usart_printf(&s_usart1, "[PN WARN] DMA anomaly: NDTR=%lu, FCR=0x%08lX, "
+                "flags=0x%02lX (TC=%lu HT=%lu TE=%lu DM=%lu FE=%lu)\r\n"
+                "  post: CR=0x%08lX NDTR=%lu M0AR=0x%08lX poll_CR=0x%08lX\r\n"
+                "  now:  CR=0x%08lX M0AR=0x%08lX PAR=0x%08lX\r\n",
+                (unsigned long)s_usart2.dma_tx->NDTR,
+                (unsigned long)s_usart2.dma_tx->FCR,
+                (unsigned long)st_flags,
+                (unsigned long)((st_flags >> 4) & 1),
+                (unsigned long)((st_flags >> 3) & 1),
+                (unsigned long)((st_flags >> 2) & 1),
+                (unsigned long)((st_flags >> 1) & 1),
+                (unsigned long)((st_flags >> 0) & 1),
+                /* post-enable diagnostics */
+                (unsigned long)g_dma_cr_post,
+                (unsigned long)g_dma_ndtr_post,
+                (unsigned long)g_dma_m0ar_post,
+                (unsigned long)g_dma_cr_poll,
+                /* current register snapshots */
+                (unsigned long)s_usart2.dma_tx->CR,
+                (unsigned long)s_usart2.dma_tx->M0AR,
+                (unsigned long)s_usart2.dma_tx->PAR);
         }
         /* 自动恢复：清标志 + 停 DMA */
         {

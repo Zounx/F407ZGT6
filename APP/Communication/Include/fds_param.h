@@ -40,6 +40,8 @@ extern uint8_t  Global_ProgramInfoList[2688];     // 程序列表存储区（字
  * ============================================================================ */
 
 extern int32_t  Global_StepResultCount;            // 步骤结果数量
+extern int32_t  Global_CurrentProgramId;          // 当前程序 ID
+extern int32_t  Global_ProgramCount;              // 程序总数
 extern int32_t  Global_SystemState;                // 系统状态
 extern int32_t  Global_SystemModel;                // 系统模式
 extern int32_t  Global_LogicLock;                  // 逻辑锁
