@@ -17,6 +17,10 @@
  *     $Test,SD,PURE#                 — 纯函数功能全面测试（写→读→子目录→删除）
  *     $Test,SD,STRESS#               — DMA 写读压力测试（默认 10000 轮）
  *     $Test,SD,STRESS,5000#           — 指定 5000 轮
+ *     $Test,SD,CSV#                  — SD 卡 CSV 异步写入测试
+ *     $Test,CHIP,RTC#                — 查询 RTC 实时时钟（日期 + 时间，LSE 32.768KHz）
+ *     $Test,CHIP,TEMP#               — 查询芯片内部温度传感器（ADC1 通道 16）
+ *     $Test,CHIP,VBAT#               — 查询纽扣电池电压（ADC1 通道 18，分压 1/2，8 次采样平均）
  *     $Test,NET,WIZnet,192.168.0.23#  — 设置 WIZnet 本机 IP
  *     $Test,NET,WIZ_REMOTE,192.168.1.200#  — 设置 WIZnet 远端目标 IP
  * 
@@ -37,6 +41,7 @@
 #include "bsp_usart.h"
 #include "bsp_gpio.h"
 #include "bsp_sram.h"
+#include "bsp_adc.h"
 #include "SD.h"
 #include "ETH_WIZdemo.h"
 #include <string.h>
@@ -245,11 +250,56 @@ static void net_set_remote_ip_handler(void)
 
 
 /* ============================================================================
+ * CHIP 测试 — $Test,CHIP,RTC#  /  $Test,CHIP,TEMP#  /  $Test,CHIP,VBAT#
+ *   RTC  — 查询 RTC 实时时钟（日期 + 时间）
+ *          时钟源：LSE 32.768KHz，PREDIV_A=127 → 256Hz → PREDIV_S=255 → 1Hz
+ *   TEMP — 查询芯片内部温度传感器
+ *          ADC1 通道 16，出厂校准 @ 30°C(0x1FFF7A2C) 和 110°C(0x1FFF7A2E)
+ *   VBAT — 查询纽扣电池电压（单位：mV，如 3142 表示 3.142V）
+ *          ADC1 通道 18，内部 2:1 分压，8 次采样平均
+ *          公式：mV = ADC_raw × 3300 × 2 / 4096
+ * ============================================================================ */
+static void chip_test_rtc(void)
+{
+    char date_str[16], time_str[9];
+
+    rtc_init();                             /* 确保 RTC 已初始化 */
+    rtc_get_date_str(date_str);
+    rtc_get_time_str(time_str);
+
+    bsp_usart_printf(&s_usart1, "[CHIP_RTC] %s  %s\r\n", date_str, time_str);
+}
+
+static void chip_test_temp(void)
+{
+    int32_t t = chip_temp_read();
+    int16_t integer  = (int16_t)(t / 100);
+    int16_t frac     = (int16_t)(t % 100);
+    if (frac < 0) frac = -frac;
+
+    bsp_usart_printf(&s_usart1, "[CHIP_TEMP] %d.%02d C\r\n", integer, frac);
+}
+
+static void chip_test_vbat(void)
+{
+    int32_t mv = chip_vbat_read();
+    if (mv < 0)
+    {
+        bsp_usart_printf(&s_usart1, "[CHIP_VBAT] read failed\r\n");
+        return;
+    }
+    bsp_usart_printf(&s_usart1, "[CHIP_VBAT] %d.%03d V\r\n", mv / 1000, mv % 1000);
+}
+
+/* ============================================================================
  * 测试命令表
  * ============================================================================ */
 static const struct test_cmd_entry s_cmd_table[] = {
     {"GPIO",  "",       gpio_test_set},    /* 空 sub = 通配，由 handler 自行解析引脚名和值 */
     {"SRAM",  "MarchC", bsp_sram_scan},
+    {"CHIP",  "RTC",    chip_test_rtc},
+    {"CHIP",  "TEMP",   chip_test_temp},
+    {"CHIP",  "VBAT",   chip_test_vbat},
     /* SD 卡 FATFS 测试 */
     {"SD",    "MOUNT",  sd_test_mount},
     {"SD",    "WRITE",  sd_test_write},

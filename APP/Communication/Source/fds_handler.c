@@ -588,6 +588,7 @@ void HandlerInit(void)
 void HandlerTask(void)
 {
     uint8_t status;
+    static uint8_t s_prev_status = 0xFF;  /* 上次 socket 状态，用于防重复日志刷屏 */
 
     status = getSn_SR(HANDLER_SOCKET);
 
@@ -615,18 +616,24 @@ void HandlerTask(void)
 
     if (status == SOCK_CLOSE_WAIT) 
 		{
-        wiz_close(HANDLER_SOCKET);
-        wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
-        wiz_listen(HANDLER_SOCKET);
-        s_rx_rd = 0;
-        s_rx_wr = 0;
-        FDS_DEBUG("[FDS] Client disconnected, re-listening\r\n");
+        if (s_prev_status != SOCK_CLOSE_WAIT) {
+            wiz_close(HANDLER_SOCKET);
+            wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
+            wiz_listen(HANDLER_SOCKET);
+            s_rx_rd = 0;
+            s_rx_wr = 0;
+            FDS_DEBUG("[FDS] Client disconnected, re-listening\r\n");
+        }
     } else if (status == SOCK_CLOSED) 
 		{
-        wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
-        wiz_listen(HANDLER_SOCKET);
-        s_rx_rd = 0;
-        s_rx_wr = 0;
-        FDS_DEBUG("[FDS] Socket reopened, listening\r\n");
+        if (s_prev_status != SOCK_CLOSED) {
+            wiz_socket(HANDLER_SOCKET, Sn_MR_TCP, HANDLER_PORT, SF_IO_NONBLOCK | SF_TCP_NODELAY);
+            wiz_listen(HANDLER_SOCKET);
+            s_rx_rd = 0;
+            s_rx_wr = 0;
+            FDS_DEBUG("[FDS] Socket reopened, listening\r\n");
+        }
     }
+
+    s_prev_status = status;
 }
