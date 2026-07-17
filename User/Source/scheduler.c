@@ -3,7 +3,7 @@
 #include "bsp_usart.h"
 #include "ExtHardwareTest.h"
 #include "fds_handler.h"
-#include "Profinet.h"
+#include "AnybusNP40Slave.h"
 
 /* 压制 GCC 10 对空数组初始化的 -Warray-bounds 假阳性警告 */
 #if defined(__GNUC__) && !defined(__ARMCC_VERSION)
@@ -183,7 +183,7 @@ static void tim6_cb(void)
     bsp_usart_proc(&s_usart2);
     if (++s_pn_task_tick >= 10) {
         s_pn_task_tick = 0;
-        PN_Task();
+        NP40_Task();
     }
 }
 

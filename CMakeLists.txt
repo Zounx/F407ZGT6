@@ -47,7 +47,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/Middlewares/FATFS/FATFS_app
     ${PROJECT_SOURCE_DIR}/Middlewares/WIZnet/Include
     ${PROJECT_SOURCE_DIR}/Middlewares/WIZnet/WIZnet_app
-    ${PROJECT_SOURCE_DIR}/APP/Communication/Include
+    ${PROJECT_SOURCE_DIR}/APP/Communication/FDS/Include
+    ${PROJECT_SOURCE_DIR}/APP/Communication/AnybusNP40
+    ${PROJECT_SOURCE_DIR}/APP/InAndOut/Include
     ${PROJECT_SOURCE_DIR}/Platform/STM32F4xx_HAL_Driver/Inc
     ${PROJECT_SOURCE_DIR}/Platform/STM32F4xx_HAL_Driver/Inc/Legacy
     ${PROJECT_SOURCE_DIR}/Platform/CMSIS/Device/ST/STM32F4xx/Include
@@ -144,11 +146,21 @@ set(WIZNET_SOURCES
 
 # --- FDS 应用层 ---
 set(FDS_SOURCES
-    APP/Communication/Source/fds_data.c
-    APP/Communication/Source/fds_param.c
-    APP/Communication/Source/fds_protocol.c
-    APP/Communication/Source/fds_handler.c
-    APP/Communication/Source/Profinet.c
+    APP/Communication/FDS/Source/fds_data.c
+    APP/Communication/FDS/Source/fds_param.c
+    APP/Communication/FDS/Source/fds_protocol.c
+    APP/Communication/FDS/Source/fds_handler.c
+)
+
+# --- Anybus NP40 从站模块 ---
+set(NP40_SOURCES
+    APP/Communication/AnybusNP40/AnybusNP40Slave.c
+)
+
+# --- InAndOut 应用层 ---
+set(IO_SOURCES
+    APP/InAndOut/Source/DI.c
+    APP/InAndOut/Source/DO.c
 )
 
 # ============================================================================
@@ -162,6 +174,8 @@ add_executable(${PROJECT_NAME}.elf
     ${FATFS_SOURCES}
     ${WIZNET_SOURCES}
     ${FDS_SOURCES}
+    ${NP40_SOURCES}
+    ${IO_SOURCES}
     ${HAL_SOURCES}
 )
 

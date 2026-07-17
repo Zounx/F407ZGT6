@@ -7,6 +7,7 @@
 
 #include "main.h"
 #include "fds_handler.h"
+#include "AnybusNP40Slave.h"
 
 /** USART1 对象定义（非 static，供 stm32f4xx_it.c 使用） */
 struct bsp_usart s_usart1;
@@ -66,7 +67,7 @@ int main(void)
         bsp_usart_printf(&s_usart1, "WIZ_UDP init failed!\r\n");
 
     /* NP40 Profinet 初始化 (USART2 已在前面 init, 这里只复位+探活) */
-    PN_Init();
+    NP40_Init();
 
     /* FDS 业务层初始化 */
     HandlerInit();
